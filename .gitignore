@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.ipynb_checkpoints/
+
+# Node / frontend
+node_modules/
+dist/
+build/
+.next/
+.turbo/
+.vite/
+
+# Env / secrets
+.env
+.env.local
+*.local
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Databricks
+.databricks/

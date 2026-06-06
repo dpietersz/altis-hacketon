@@ -54,7 +54,7 @@ for c in (RAW, GOLD):
 # COMMAND ----------
 
 import pandas as pd
-import io
+import io, json
 
 blob = svc.get_blob_client(container=RAW, blob="database.xlsx")
 data = blob.download_blob().readall()
@@ -62,6 +62,18 @@ print(f"Downloaded {len(data):,} bytes")
 
 sheets = pd.read_excel(io.BytesIO(data), sheet_name=None)
 print(f"Loaded {len(sheets)} sheet(s): {list(sheets)}")
+
+summary = {"bytes": len(data), "sheets": {}}
 for name, frame in sheets.items():
+    rows, cols = frame.shape
+    summary["sheets"][name] = {
+        "rows": rows,
+        "cols": cols,
+        "columns": list(frame.columns.astype(str)),
+        "head": frame.head(3).astype(str).to_dict(orient="records"),
+    }
     print(f"--- {name} {frame.shape} ---")
     print(frame.head().to_string())
+
+# Surface structured result to `databricks jobs get-run-output`
+dbutils.notebook.exit(json.dumps(summary))

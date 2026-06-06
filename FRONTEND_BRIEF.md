@@ -33,10 +33,12 @@
 
 Bottom-up **direct-method, driver-decomposition** forecast. **No ML, no black box.** Toggleable assumptions per portco:
 
-- `dso` (days sales outstanding) — shifts invoices into receipt weeks
+- `dso` (days sales outstanding) — shifts invoices into receipt weeks. **Default 30 days (CFO-stated, uniform across portcos)**; toggle 20–60 for scenario play. Wet scenario adds 7, dry subtracts 3 — those are weather-driven schedule shifts on top of the steady-state 30 days.
 - `gross_margin` — derives outflows from inflows
 - `materials_share` / `subcon_share` / `labour_share` — splits derived outflows across drivers
 - `revenue_growth_assumption` — projects future invoicing from historical seasonality
+
+**Acceptance→invoice lag (7 days):** expose this in the dashboard as a **visible-but-not-toggleable fact** alongside DSO. It's a process truth, not a forecasting knob — receipts math projects from invoicing rate, so this lag is already baked into the historical baseline.
 
 **Label in the UI as:** `Forecast (driver-decomposed)` — never "AI Forecast" or "ML Forecast".
 
@@ -119,13 +121,13 @@ Use these ranges to seed realistic-looking synthetic data in Lovable. Numbers ar
 - **Annual revenue per portco:** €3M–€12M range; pick one each.
 - **Bookings per portco per year:** 2k–6k.
 - **Weekly inflows (historical):** mean ~€60k–€220k per portco, with a clear summer peak (May–Sep ~1.5×) and winter dip (Dec–Feb ~0.6×). Roofing is weather-seasonal.
-- **DSO defaults per portco:** 35, 42, 50 days. Toggle range 20–90.
+- **DSO default:** 30 days (CFO-stated) for all portcos; toggle range 20–60 for scenario play.
 - **Gross margin defaults:** 18%, 22%, 26%. Toggle range 5–45%.
 - **Outflow driver split:** materials 45%, subcontractor 35%, labour 20% (controller-editable).
 - **Scenarios:**
   - `base` — defaults
-  - `wet` — DSO +7 days, revenue −10% for next 6 weeks
-  - `dry` — DSO −3 days, revenue +5% for next 6 weeks
+  - `wet` — DSO +7 days (on top of 30), revenue −10% for next 6 weeks
+  - `dry` — DSO −3 days (on top of 30), revenue +5% for next 6 weeks
 - **Covenant placeholder threshold:** show as `€ X` with a tooltip "placeholder — awaiting covenant terms doc". Use ~€500k–€1.5M ranges so the gauge looks credible.
 - **GL accounts to show in drill-downs:** `8000`, `8001`, `8002`, `8004`, `8005`.
 
@@ -154,3 +156,4 @@ In the mockup this can be a side-panel that opens on click. Show the chain: `fig
 - "Illustrative — no project data yet" — on Project Lead view
 - "Aggregate only — no transactional data" — on the 4th portco
 - "Observed" vs "Projected" badges on history vs forecast weeks
+- Receipt-timing tooltips should mention **both lags**: acceptance→invoice 7 days (CFO-stated process), invoice→paid 30 days (CFO-stated DSO).

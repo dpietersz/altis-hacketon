@@ -44,6 +44,19 @@ gold_c = svc.get_container_client(GOLD)
 
 # MAGIC %md
 # MAGIC ## Static mappings (audit-friendly)
+# MAGIC
+# MAGIC Two lookup tables drive the gold transformation:
+# MAGIC
+# MAGIC - **`PORTCO_RENAME`** — resolves the "TBC" placeholders from silver
+# MAGIC   (`exact_opco_tbc`, `dataset2_opco_tbc`) into real portco names confirmed
+# MAGIC   in notebook 04 by matching monthly revenue against the aggregated JSON.
+# MAGIC - **`GL_DRIVER_MAP`** — each GL account → which driver it represents.
+# MAGIC   Today all 80xx accounts are `milestone_in` (sales). When new GL accounts
+# MAGIC   appear (materials, subcontractors, payroll), a controller adds rows here
+# MAGIC   — no pipeline change needed.
+# MAGIC
+# MAGIC Both maps are echoed to `gold/_meta/` so an auditor can see what was in
+# MAGIC effect for any given run.
 
 # COMMAND ----------
 
@@ -72,6 +85,12 @@ JOURNAL_DRIVER_MAP = {
 }
 
 
+# Render the mappings as DataFrames so the team can SEE the rules at a glance
+display(pd.DataFrame([{"silver_portco": k, "gold_portco": v} for k, v in PORTCO_RENAME.items()]))
+display(pd.DataFrame([{"gl_account": k, "driver": d, "label": lbl} for k, (d, lbl) in GL_DRIVER_MAP.items()]))
+
+# COMMAND ----------
+
 def classify(gl_account, journal):
     gl = str(gl_account).strip() if gl_account is not None else ""
     if gl in GL_DRIVER_MAP:
@@ -88,16 +107,29 @@ def classify(gl_account, journal):
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Build gold/bookings_classified
+# MAGIC ## Build `gold/bookings_classified`
+# MAGIC
+# MAGIC Three transformations on top of silver:
+# MAGIC 1. **Resolve portco** — apply `PORTCO_RENAME`.
+# MAGIC 2. **Classify driver** — look up `gl_account` in `GL_DRIVER_MAP`, fall back to journal,
+# MAGIC    fall back to "other".
+# MAGIC 3. **Clean `gl_account_text`** — for the Exact source this column was a per-booking
+# MAGIC    free-text field (invoice address). Replace with the controlled label from the map
+# MAGIC    so the column means the same thing in every row. Raw free text stays in
+# MAGIC    `boekingstekst` for traceability.
 
 # COMMAND ----------
 
 silver_bytes = silver_c.get_blob_client("bookings.parquet").download_blob().readall()
 silver = pd.read_parquet(io.BytesIO(silver_bytes))
 print(f"silver rows: {len(silver):,}")
+print("\nSilver portco counts BEFORE rename:")
+print(silver["portco"].value_counts().to_string())
 
 # Resolve portco
 silver["portco"] = silver["portco"].map(PORTCO_RENAME).fillna(silver["portco"])
+print("\nAFTER rename:")
+print(silver["portco"].value_counts().to_string())
 
 # Classify driver
 classified = silver.apply(
@@ -119,10 +151,14 @@ gold["gl_account_text"] = gold.apply(clean_gl_text, axis=1)
 
 # Final touch-ups
 gold["ingested_at"] = datetime.now(timezone.utc)
-print(f"gold rows: {len(gold):,}")
-print(gold["portco"].value_counts().to_string())
-print()
+print(f"\ngold rows: {len(gold):,}")
+print("\nDriver split:")
 print(gold["driver"].value_counts().to_string())
+
+# Sample after classification — pick 2 rows per portco to eyeball the transformation
+print("\nSample bookings after classify (2 per portco):")
+sample_cols = ["portco", "gl_account", "gl_account_text", "driver", "booking_date", "amount_net", "boekingstekst"]
+display(gold.groupby("portco", group_keys=False).head(2)[sample_cols])
 
 # Write
 buf = io.BytesIO()
@@ -134,7 +170,18 @@ print("wrote gold/bookings_classified.parquet")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Build gold/portfolio_kpi_monthly from the aggregated JSON
+# MAGIC ## Build `gold/portfolio_kpi_monthly` from the aggregated JSON
+# MAGIC
+# MAGIC The JSON gives portfolio-level Netto-omzet per portco per month, including
+# MAGIC **andijk** (for which we have no transaction data). This is the only
+# MAGIC source that covers all 4 portcos, so the frontend uses it for any portfolio
+# MAGIC roll-up that must include andijk.
+# MAGIC
+# MAGIC The JSON shape differs per portco — month keys like `jan-23` live at
+# MAGIC varying depths and sometimes split across GL accounts (heeze is a "floor
+# MAGIC estimate" from partial data). The walker flattens everything to one row
+# MAGIC per `(portco, year, month)`; for heeze we sum across its GL-specific
+# MAGIC series.
 
 # COMMAND ----------
 
@@ -217,13 +264,27 @@ kpi_clean.to_parquet(buf, index=False)
 buf.seek(0)
 gold_c.upload_blob(name="portfolio_kpi_monthly.parquet", data=buf.getvalue(), overwrite=True)
 print("wrote gold/portfolio_kpi_monthly.parquet")
-print()
-print(kpi_clean.groupby(["portco", "year"], as_index=False)["revenue_eur"].sum().to_string())
+
+# Annual totals per portco — quick eyeball of which portcos are present and at what scale
+display(
+    kpi_clean.groupby(["portco", "year"], as_index=False)["revenue_eur"].sum()
+    .pivot(index="portco", columns="year", values="revenue_eur").round(0)
+)
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Cross-check gold transactional totals vs KPI JSON
+# MAGIC ## Cross-check: gold transactional totals vs KPI JSON
+# MAGIC
+# MAGIC The single most important validation step. We sum `amount_net` per (portco,
+# MAGIC year, month) from gold bookings and compare to the JSON KPI. **Δ within ~2%
+# MAGIC means parsing + dedup are honest.** Bigger gaps are flagged for follow-up.
+# MAGIC
+# MAGIC Expected behaviour:
+# MAGIC - **peter_ummels** / **winschoten**: tight match (silver came from same source as JSON).
+# MAGIC - **heeze**: gold should be much HIGHER than JSON (the JSON note says its
+# MAGIC   heeze numbers are a "floor estimate" from partial data; we have full GBs).
+# MAGIC - **andijk**: gold = 0 (no Tx data); KPI carries the value.
 
 # COMMAND ----------
 
@@ -240,7 +301,7 @@ joined = pd.merge(gold_monthly, kpi_compare[["portco", "year", "month", "revenue
 joined["delta"] = (joined["amount_net_tx"].fillna(0) - joined["revenue_kpi"].fillna(0)).round(2)
 joined["delta_pct"] = (joined["delta"] / joined["revenue_kpi"].replace(0, pd.NA) * 100).round(2)
 
-# Summary by portco-year
+# Summary by portco-year — Δ% column makes the validation result obvious
 summary = (
     joined.groupby(["portco", "year"], as_index=False)
     .agg(tx_total=("amount_net_tx", "sum"),
@@ -248,7 +309,8 @@ summary = (
          delta_total=("delta", "sum"))
     .round(2)
 )
-print(summary.to_string())
+summary["delta_pct"] = (summary["delta_total"] / summary["kpi_total"].replace(0, pd.NA) * 100).round(2)
+display(summary)
 
 # COMMAND ----------
 

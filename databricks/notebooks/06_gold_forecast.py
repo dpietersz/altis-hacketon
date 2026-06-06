@@ -58,7 +58,19 @@ gold_c = svc.get_container_client(GOLD)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Per-portco assumptions (controller-tunable)
+# MAGIC ## Assumptions & scenarios (the only knobs that move the forecast)
+# MAGIC
+# MAGIC Two dicts drive everything below:
+# MAGIC
+# MAGIC - **`ASSUMPTIONS`** — per-portco steady-state values. DSO is CFO-stated (30 days
+# MAGIC   uniform). Gross margin and outflow shares are starting defaults the controller
+# MAGIC   will refine.
+# MAGIC - **`SCENARIOS`** — `base` / `wet` / `dry` shifts on top of the steady-state.
+# MAGIC   Wet weather slows acceptance → slower receipts (DSO +7d) and trims revenue 10%
+# MAGIC   for the first 6 weeks; dry weather pulls receipts in (-3d) and lifts revenue 5%.
+# MAGIC
+# MAGIC Every forecast figure later traces back to exactly these numbers — they show up
+# MAGIC in the output as `assumption_dso_days` / `assumption_gross_margin` columns.
 
 # COMMAND ----------
 
@@ -93,6 +105,10 @@ SCENARIOS = {
 DRIVER_INFLOW = "milestone_in"
 DRIVER_OUTFLOWS = ["materials_out", "subcon_out", "labour_out"]
 
+# Render the knobs as tables so the team sees the inputs before the math
+display(pd.DataFrame.from_dict(ASSUMPTIONS, orient="index").reset_index().rename(columns={"index": "portco"}))
+display(pd.DataFrame.from_dict(SCENARIOS, orient="index").reset_index().rename(columns={"index": "scenario"}))
+
 # COMMAND ----------
 
 # MAGIC %md
@@ -118,6 +134,12 @@ print(f"net inflow bookings: {len(inflows):,}")
 
 # MAGIC %md
 # MAGIC ## Historical weekly cash by portco × driver
+# MAGIC
+# MAGIC We aggregate `amount_net` per Monday-week per portco for the **observed**
+# MAGIC inflow driver (`milestone_in`). Then we derive the three outflow series
+# MAGIC (materials / subcontractor / labour) from gross margin and share splits.
+# MAGIC The `is_observed` column makes this distinction explicit so the dashboard
+# MAGIC can show inflows as solid lines and derived outflows as dashed/labelled.
 
 # COMMAND ----------
 
@@ -155,8 +177,11 @@ def derive_outflows(df_in):
 weekly_out = derive_outflows(weekly_in)
 history = pd.concat([weekly_in, weekly_out], ignore_index=True).sort_values(["portco", "week_start", "driver"]).reset_index(drop=True)
 history["amount_eur"] = history["amount_eur"].round(2)
-print(history.head(20).to_string())
 print(f"history rows: {len(history):,}")
+
+# Show one recent week per portco so you can see all 4 drivers side-by-side
+recent = history[history["week_start"] >= history["week_start"].max() - pd.Timedelta(weeks=8)]
+display(recent.pivot_table(index=["portco", "week_start"], columns="driver", values="amount_eur", aggfunc="sum").round(0))
 
 # COMMAND ----------
 
@@ -171,6 +196,15 @@ print("wrote gold/cashflow_history_weekly.parquet")
 
 # MAGIC %md
 # MAGIC ## Seasonality factors per portco (month-of-year)
+# MAGIC
+# MAGIC We compute each portco's mean monthly inflow across the complete years
+# MAGIC 2023-2025 and express each month as a ratio of that portco's overall
+# MAGIC monthly mean. A factor > 1.0 means "this month is busier than average for
+# MAGIC this portco". Roofing has a strong summer peak — expect Jul/Aug/Sep > 1.0
+# MAGIC and Dec/Jan < 1.0.
+# MAGIC
+# MAGIC The factor is applied to projected future weeks only — observed weeks come
+# MAGIC directly from the ledger.
 
 # COMMAND ----------
 
@@ -185,8 +219,7 @@ month_avg = seasonal_base.groupby(["portco", "month"], as_index=False)["amount_n
 yearly_avg = seasonal_base.groupby("portco", as_index=False)["amount_net"].mean().rename(columns={"amount_net": "overall_monthly_avg"})
 seasonality = month_avg.merge(yearly_avg, on="portco")
 seasonality["seasonal_factor"] = (seasonality["avg_monthly"] / seasonality["overall_monthly_avg"]).round(3)
-print("Seasonal factors (per portco × month):")
-print(seasonality.pivot(index="month", columns="portco", values="seasonal_factor").to_string())
+display(seasonality.pivot(index="month", columns="portco", values="seasonal_factor"))
 
 # Lookup helper
 def get_seasonal(portco, month):
@@ -199,6 +232,11 @@ def get_seasonal(portco, month):
 
 # MAGIC %md
 # MAGIC ## Per-portco anchor date + recent avg weekly invoicing
+# MAGIC
+# MAGIC `anchor` = the latest `booking_date` we observed for each portco. Anything
+# MAGIC after that is projection. `recent_weekly_avg` is the mean weekly invoicing
+# MAGIC over the 13 weeks before the anchor — this is the baseline that
+# MAGIC seasonality multiplies against to project future invoicing.
 
 # COMMAND ----------
 
@@ -215,12 +253,26 @@ def recent_weekly_avg(portco, anchor_d):
     return float(win["amount_net"].sum()) / weeks
 
 anchors["recent_weekly_avg"] = anchors.apply(lambda r: recent_weekly_avg(r["portco"], r["anchor"]), axis=1)
-print(anchors.to_string())
+display(anchors.round({"recent_weekly_avg": 0}))
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC ## Forecast 13 weeks per (portco, scenario, driver)
+# MAGIC
+# MAGIC For each future cash week W and each portco × scenario combo we compute
+# MAGIC the **invoice window** that should land receipts in W (window = `W − DSO`).
+# MAGIC Three branches:
+# MAGIC - **observed** — invoice window entirely before the anchor → sum the real
+# MAGIC   bookings in that window. Deterministic, traceable to source rows.
+# MAGIC - **mixed** — window straddles the anchor → observed for the historical
+# MAGIC   part + projection for the future part.
+# MAGIC - **projected** — window entirely after the anchor → seasonality × recent
+# MAGIC   weekly avg × scenario revenue multiplier.
+# MAGIC
+# MAGIC The `confidence` column records which branch applied for every row, so the
+# MAGIC dashboard can colour-code certainty. Outflows are always `derived` because
+# MAGIC they come from the margin assumption, not observed cash.
 
 # COMMAND ----------
 
@@ -330,7 +382,15 @@ for portco in ASSUMPTIONS.keys():
                 })
 
 forecast = pd.DataFrame(forecast_rows)
-print(f"forecast rows: {len(forecast):,}")
+print(f"forecast rows: {len(forecast):,}  (4 portcos × 13 weeks × 4 drivers × 3 scenarios = 624)")
+
+# Show what the forecast looks like for the FIRST portco's base scenario, all 13 weeks × 4 drivers
+example_portco = list(ASSUMPTIONS.keys())[0]
+example = forecast[(forecast["portco"] == example_portco) & (forecast["scenario"] == "base")]
+display(example.pivot(index=["week_idx", "week_start"], columns="driver", values="amount_eur").round(0))
+
+# Confidence distribution — how much of the forecast is observed vs projected
+display(forecast[forecast["driver"] == "milestone_in"].groupby(["portco", "confidence"], as_index=False).size().rename(columns={"size": "weeks"}))
 
 buf = io.BytesIO()
 forecast.to_parquet(buf, index=False)
@@ -379,12 +439,10 @@ totals = (
     forecast.groupby(["portco", "scenario", "week_idx", "week_start"], as_index=False)["amount_eur"].sum()
     .rename(columns={"amount_eur": "net_cash"})
 )
-print(totals.head(40).to_string())
 
-# 13w net totals per (portco, scenario)
+# 13w net totals per (portco, scenario) — the headline number for the CFO
 totals_13w = totals.groupby(["portco", "scenario"], as_index=False)["net_cash"].sum().round(2)
-print("\n13-week net cash (sum across 13 weeks):")
-print(totals_13w.to_string())
+display(totals_13w.pivot(index="portco", columns="scenario", values="net_cash"))
 
 # COMMAND ----------
 

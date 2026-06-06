@@ -47,6 +47,14 @@ gold_client = svc.get_container_client(GOLD)
 
 # MAGIC %md
 # MAGIC ## Canonical schema (target)
+# MAGIC
+# MAGIC We collapse 4 source-system schemas (Yuki, Exact, dataset2-yearly, andijk-KPI)
+# MAGIC into one canonical booking row. Same shape coming out of every parser so
+# MAGIC the union is a plain `pd.concat`. Fields the source doesn't have stay as
+# MAGIC nulls (e.g. Yuki has no `vat_amount`).
+# MAGIC
+# MAGIC The `source_file` and `source_schema` columns survive into gold so every
+# MAGIC downstream number traces back to a specific xlsx + sheet.
 
 # COMMAND ----------
 
@@ -94,6 +102,15 @@ def _to_date(v):
 
 # MAGIC %md
 # MAGIC ## Parser — Schema A (Yuki / Peter Ummels)
+# MAGIC
+# MAGIC Yuki exports have **12 meta rows** before the real header. Row 0 carries the
+# MAGIC administration, row 6 carries the GL account ("Grootboekrekening 8005 - omzet
+# MAGIC waarbij de heffing naar u is verlegd"), and row 12 is the actual column header
+# MAGIC (`Nr · Per · Datum · Bkst.nr · Dagboek · Debet · Credit`).
+# MAGIC
+# MAGIC We read the file twice: first with no header to grab the meta, then again
+# MAGIC with `header=12` to grab the body. Footer "Eindtotaal" rows are filtered
+# MAGIC out by requiring `Datum` to parse as a date.
 
 # COMMAND ----------
 
@@ -138,6 +155,10 @@ def parse_yuki(data: bytes, source_file: str) -> pd.DataFrame:
 
 # MAGIC %md
 # MAGIC ## Parser — Schema B (Exact / GB files)
+# MAGIC
+# MAGIC Exact GB exports are tidier — header on row 0, 11 columns. We carry over
+# MAGIC `BTW` (VAT amount), `BTW-srt` (VAT type), and `Boekingstekst` (free-text
+# MAGIC booking description, often the invoice address).
 
 # COMMAND ----------
 
@@ -175,6 +196,11 @@ def parse_exact_gb(data: bytes, source_file: str) -> pd.DataFrame:
 
 # MAGIC %md
 # MAGIC ## Parser — Schema C (Dataset 2 yearly sheets)
+# MAGIC
+# MAGIC The yearly sheets in `Altis dataset 2.xlsx` are winschoten's transactional
+# MAGIC data — 6 columns, one journal (`006 - Verkoop`). No GL column; we leave
+# MAGIC `gl_account` null here and let driver classification fall back to the
+# MAGIC journal-to-driver map in notebook 05.
 
 # COMMAND ----------
 
@@ -207,6 +233,12 @@ def parse_dataset2_yearly(data: bytes, sheet_name: str, source_file: str) -> pd.
 
 # MAGIC %md
 # MAGIC ## Walk + parse + write per-source
+# MAGIC
+# MAGIC Iterate every blob under `raw/received_original_data/`, pick a parser by
+# MAGIC folder prefix, and accumulate parsed DataFrames in `per_source`. Any file
+# MAGIC that throws gets logged in `warnings` so one bad file doesn't kill the
+# MAGIC pipeline — the team can read `warnings` after the run to see what didn't
+# MAGIC make it in.
 
 # COMMAND ----------
 
@@ -243,8 +275,16 @@ for b in blobs:
         continue
 
 print(f"parsed {len(per_source)} source partitions, {len(warnings)} warnings")
-for s, df in per_source.items():
-    print(f"  {len(df):>6}  {s}")
+if warnings:
+    display(pd.DataFrame(warnings))
+
+# One row per parsed source — see rowcounts at a glance
+per_source_summary = pd.DataFrame([
+    {"source": s, "rows": len(df), "schema": df["source_schema"].iloc[0] if len(df) else None,
+     "portco": df["portco"].iloc[0] if len(df) else None}
+    for s, df in per_source.items()
+]).sort_values(["portco", "source"]).reset_index(drop=True)
+display(per_source_summary)
 
 # COMMAND ----------
 
@@ -271,7 +311,13 @@ print(f"wrote {len(per_source)} files to silver/by_source/")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Union → canonical, dedup, write silver/bookings.parquet
+# MAGIC ## Union → canonical, dedup, write `silver/bookings.parquet`
+# MAGIC
+# MAGIC The Yuki exports overlap: for GL 8005 each year has BOTH a full-year file
+# MAGIC AND a periods 1-5 file. Naively unioning would double-count ~5k rows. We
+# MAGIC dedup on `(administration, gl_account, booking_number, debit, credit,
+# MAGIC booking_date)` — same booking in two files is identical on all six. The
+# MAGIC dropped count below should be ~4-5k for this data set.
 
 # COMMAND ----------
 
@@ -314,6 +360,10 @@ display(sdf.limit(20))
 
 # MAGIC %md
 # MAGIC ## Quick aggregations to sanity-check
+# MAGIC
+# MAGIC Net revenue per (portco, year) and per (portco, GL) — first eyeball that
+# MAGIC the dedup worked, that GLs in our data are what we expected (all 80xx
+# MAGIC Omzet), and that portco labels are consistent.
 
 # COMMAND ----------
 

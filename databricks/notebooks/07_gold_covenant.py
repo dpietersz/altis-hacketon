@@ -59,6 +59,12 @@ print(f"forecast: {len(forecast):,}   history: {len(history):,}")
 
 # MAGIC %md
 # MAGIC ## Placeholder covenant parameters per portco
+# MAGIC
+# MAGIC We do not have the real covenant terms doc yet, so we use a defensible
+# MAGIC stand-in: each portco must keep cumulative cash above a **floor** equal to
+# MAGIC ~6 weeks of recent weekly inflow. Starting cash is €1M per portco
+# MAGIC (placeholder — controller-set in production). The dashboard MUST label
+# MAGIC these as placeholder until the real covenant terms arrive.
 
 # COMMAND ----------
 
@@ -81,12 +87,17 @@ for portco in forecast["portco"].unique():
         "recent_weekly_avg_in_eur": round(avg_in, 2),
     }
 
-print(json.dumps(PLACEHOLDER_PARAMS, indent=2))
+display(pd.DataFrame.from_dict(PLACEHOLDER_PARAMS, orient="index").reset_index().rename(columns={"index": "portco"}))
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC ## Net cash per (portco, scenario, week)
+# MAGIC
+# MAGIC We collapse the forecast across all drivers to get one net-cash number per
+# MAGIC week, then accumulate from `starting_cash`. The `status` column trips
+# MAGIC `watch` 20% above the floor and `breach` at or below the floor — the
+# MAGIC dashboard uses these for amber/red badges.
 
 # COMMAND ----------
 
@@ -117,12 +128,23 @@ covenant.to_parquet(buf, index=False)
 buf.seek(0)
 gold_c.upload_blob(name="covenant_headroom.parquet", data=buf.getvalue(), overwrite=True)
 print("wrote gold/covenant_headroom.parquet")
-print(covenant.head(20).to_string())
+
+# Show one scenario at a time so the team can scan week-by-week status colours
+display(
+    covenant[covenant["scenario"] == "base"][
+        ["portco", "week_idx", "week_start", "net_cash_eur", "cum_cash_eur", "floor_eur", "headroom_eur", "status"]
+    ].round(0)
+)
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC ## Consolidated 13-week view (PE Board lens)
+# MAGIC
+# MAGIC The PE board wants one number per week across the portfolio. We sum the
+# MAGIC forecast across portcos for each (scenario, week, driver) and also produce
+# MAGIC a per-week net cash with rolling cumulative — that's the line the board
+# MAGIC actually looks at.
 
 # COMMAND ----------
 
@@ -158,12 +180,15 @@ buf.seek(0)
 gold_c.upload_blob(name="cashflow_consolidated_net_13w.parquet", data=buf.getvalue(), overwrite=True)
 
 print("wrote consolidated parquets")
-print(consolidated_net.to_string())
+display(consolidated_net.pivot(index=["week_idx", "week_start"], columns="scenario", values="cum_cash_eur").round(0))
 
 # COMMAND ----------
 
 # MAGIC %md
 # MAGIC ## Status summary
+# MAGIC
+# MAGIC One row per (portco, scenario, status) telling us how many weeks land in
+# MAGIC each colour. This is what feeds the headline indicators on the CFO/PE views.
 
 # COMMAND ----------
 
@@ -175,9 +200,9 @@ status_summary = (
     .round(2)
     .sort_values(["portco", "scenario", "status"])
 ).reset_index(drop=True)
-print(status_summary.to_string())
+display(status_summary)
 
-# Worst-case breach across the portfolio per scenario
+# Worst-case breach across the portfolio per scenario — one row per scenario
 worst = (
     covenant.groupby(["scenario"], as_index=False)
     .agg(min_headroom=("headroom_eur", "min"),
@@ -185,8 +210,7 @@ worst = (
          watch_weeks=("status", lambda s: int((s == "watch").sum())))
     .round(2)
 )
-print("\nWorst-case per scenario:")
-print(worst.to_string())
+display(worst)
 
 # COMMAND ----------
 

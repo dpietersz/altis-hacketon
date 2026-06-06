@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Altis Cash Flow Pipeline — How It Works</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --card: #ffffff;
+    --ink: #1c1c1c;
+    --muted: #5e6470;
+    --line: #e4e4df;
+    --accent: #2e5d4f;
+    --accent-soft: #e9efea;
+    --warn: #b85c00;
+    --warn-soft: #fff2e3;
+    --info: #1f5b8b;
+    --info-soft: #e8f1f8;
+    --green: #2f7a3e;
+    --yellow: #b88800;
+    --red: #b1352f;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 17px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: 740px;
+    margin: 0 auto;
+    padding: 56px 24px 96px;
+  }
+  header.hero {
+    margin-bottom: 56px;
+  }
+  header.hero .tag {
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  header.hero h1 {
+    font-size: 36px;
+    line-height: 1.2;
+    margin: 0 0 16px;
+    letter-spacing: -0.01em;
+  }
+  header.hero p.sub {
+    font-size: 19px;
+    color: var(--muted);
+    margin: 0;
+  }
+  section {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 32px 32px 24px;
+    margin: 0 0 24px;
+  }
+  section h2 {
+    font-size: 24px;
+    margin: 0 0 6px;
+    letter-spacing: -0.01em;
+  }
+  section h2 .step {
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    display: block;
+    margin-bottom: 4px;
+  }
+  section h3 {
+    font-size: 17px;
+    margin: 24px 0 6px;
+  }
+  section p, section li { color: #2a2a2a; }
+  section p { margin: 12px 0; }
+  ul, ol { padding-left: 22px; }
+  ul li, ol li { margin: 6px 0; }
+  .lede {
+    font-size: 18px;
+    color: var(--ink);
+    margin-top: 0;
+  }
+  .callout {
+    border-left: 3px solid var(--info);
+    background: var(--info-soft);
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin: 16px 0;
+    font-size: 16px;
+  }
+  .callout.warn {
+    border-left-color: var(--warn);
+    background: var(--warn-soft);
+  }
+  .callout strong { color: var(--ink); }
+  .pill {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    background: var(--accent-soft);
+    color: var(--accent);
+    margin-right: 6px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 15px;
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  th {
+    font-weight: 600;
+    background: #fafaf7;
+    font-size: 14px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .dot {
+    display: inline-block;
+    width: 10px; height: 10px; border-radius: 50%;
+    vertical-align: middle; margin-right: 8px;
+  }
+  .dot.g { background: var(--green); }
+  .dot.y { background: var(--yellow); }
+  .dot.r { background: var(--red); }
+  .pipeline {
+    margin: 8px -8px 12px;
+    overflow-x: auto;
+  }
+  .pipeline svg { display: block; min-width: 660px; max-width: 100%; }
+  .scenarios {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin: 16px 0;
+  }
+  @media (max-width: 600px) { .scenarios { grid-template-columns: 1fr; } }
+  .scenarios .s {
+    background: #fafaf7;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 14px 12px;
+  }
+  .scenarios .s b { display: block; font-size: 15px; margin-bottom: 4px; }
+  .scenarios .s.base b { color: var(--accent); }
+  .scenarios .s.wet b { color: var(--info); }
+  .scenarios .s.dry b { color: var(--warn); }
+  .scenarios .s p { font-size: 14px; color: var(--muted); margin: 0; }
+  code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; background: #f1f1ec; padding: 1px 6px; border-radius: 4px; }
+  footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+    margin-top: 40px;
+  }
+  hr {
+    border: 0; border-top: 1px solid var(--line); margin: 28px 0;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="tag">Altis hackathon — data pipeline walkthrough</div>
+  <h1>How the cash flow pipeline works</h1>
+  <p class="sub">A plain-English walkthrough of the data work behind the Tier 1 CFO dashboard. Read top to bottom — no finance or engineering background needed.</p>
+</header>
+
+<section>
+  <h2>The big picture in three sentences</h2>
+  <p class="lede">Altis owns four roofing companies in the Netherlands. The CFO needs to know how much cash will land in the bank over the next 13 weeks, whether any company is at risk of breaking a loan rule, and how those numbers change if the weather goes bad. We built a small data pipeline in Databricks that turns ~25 messy Excel files into clean, dashboard-ready data — that is what this document explains.</p>
+</section>
+
+<section>
+  <h2>The journey, in one picture</h2>
+  <p>The data goes through four stages. Each stage takes the previous one as input and produces something more useful.</p>
+  <div class="pipeline">
+    <svg viewBox="0 0 660 170" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 Z" fill="#5e6470"/>
+        </marker>
+      </defs>
+      <!-- boxes -->
+      <g font-family="-apple-system, sans-serif" font-size="13" fill="#1c1c1c">
+        <rect x="10"  y="55" width="120" height="60" rx="10" ry="10" fill="#fff2e3" stroke="#b85c00"/>
+        <text x="70" y="80" text-anchor="middle" font-weight="600">Raw Excel</text>
+        <text x="70" y="98" text-anchor="middle" fill="#5e6470">~25 files, 2 systems</text>
+
+        <rect x="160" y="55" width="120" height="60" rx="10" ry="10" fill="#e8f1f8" stroke="#1f5b8b"/>
+        <text x="220" y="80" text-anchor="middle" font-weight="600">Silver</text>
+        <text x="220" y="98" text-anchor="middle" fill="#5e6470">one tidy table</text>
+
+        <rect x="310" y="55" width="120" height="60" rx="10" ry="10" fill="#e9efea" stroke="#2e5d4f"/>
+        <text x="370" y="80" text-anchor="middle" font-weight="600">Gold</text>
+        <text x="370" y="98" text-anchor="middle" fill="#5e6470">labels + forecast</text>
+
+        <rect x="460" y="55" width="120" height="60" rx="10" ry="10" fill="#f1f1ec" stroke="#5e6470"/>
+        <text x="520" y="80" text-anchor="middle" font-weight="600">SQL + dashboard</text>
+        <text x="520" y="98" text-anchor="middle" fill="#5e6470">the product</text>
+
+        <!-- arrows -->
+        <line x1="130" y1="85" x2="160" y2="85" stroke="#5e6470" stroke-width="1.5" marker-end="url(#arrow)"/>
+        <line x1="280" y1="85" x2="310" y2="85" stroke="#5e6470" stroke-width="1.5" marker-end="url(#arrow)"/>
+        <line x1="430" y1="85" x2="460" y2="85" stroke="#5e6470" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+        <!-- step labels -->
+        <text x="155" y="40" font-size="12" fill="#5e6470" text-anchor="middle">Step 1</text>
+        <text x="305" y="40" font-size="12" fill="#5e6470" text-anchor="middle">Steps 2 + 3 + 4</text>
+        <text x="455" y="40" font-size="12" fill="#5e6470" text-anchor="middle">Step 5</text>
+
+        <text x="155" y="135" font-size="12" fill="#5e6470" text-anchor="middle">clean</text>
+        <text x="305" y="135" font-size="12" fill="#5e6470" text-anchor="middle">classify, forecast, check</text>
+        <text x="455" y="135" font-size="12" fill="#5e6470" text-anchor="middle">copy out</text>
+      </g>
+    </svg>
+  </div>
+  <p>Below: what happens at each step, in plain English.</p>
+</section>
+
+<section>
+  <h2><span class="step">Step 1 of 5</span>Clean up the messy raw files (Silver layer)</h2>
+  <p>The client gave us about <strong>25 Excel files</strong>. They come from two different accounting systems (Yuki and Exact) plus a couple of summary files. Each system organises its files differently:</p>
+  <ul>
+    <li>Yuki files start with a <strong>12-row "cover page"</strong> before the real data begins</li>
+    <li>Exact files start cleanly with the header on row 1</li>
+    <li>Some files <strong>overlap</strong> — the client sent us both a "full year" file and a "first 5 months" file for the same account</li>
+  </ul>
+  <p>We read every file, force them all into <strong>one common shape</strong>, and remove duplicate rows. The result is a single tidy table called <code>silver/bookings.parquet</code>.</p>
+  <div class="callout">
+    <strong>Number out:</strong> 36,565 raw bookings &rarr; <strong>31,734 unique bookings</strong> after duplicates removed (about 4,831 overlaps cleanly dropped).
+  </div>
+</section>
+
+<section>
+  <h2><span class="step">Step 2 of 5</span>Add business labels (Gold layer — Classify)</h2>
+  <p>The cleaned table is just rows of numbers. To chart anything useful, every booking needs two labels.</p>
+
+  <h3>Label 1: which company is this?</h3>
+  <p>The four roofing companies in the portfolio:</p>
+  <table>
+    <thead><tr><th>Company</th><th>Where</th><th>Do we have booking-level data?</th></tr></thead>
+    <tbody>
+      <tr><td>Peter Ummels</td><td>Brunssum, Limburg</td><td>Yes</td></tr>
+      <tr><td>Heeze</td><td>Noord-Brabant</td><td>Yes</td></tr>
+      <tr><td>Winschoten</td><td>Groningen</td><td>Yes</td></tr>
+      <tr><td>Andijk</td><td>Noord-Holland</td><td>No — only a monthly summary</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Label 2: what kind of cash flow is it?</h3>
+  <p>Every booking gets sorted into one of four "drivers" — types of cash movement:</p>
+  <ul>
+    <li><span class="pill">milestone_in</span> money coming in from a customer paying an invoice</li>
+    <li><span class="pill">materials_out</span> money going out to buy roofing materials</li>
+    <li><span class="pill">subcon_out</span> money going out to subcontractors</li>
+    <li><span class="pill">labour_out</span> money going out for wages</li>
+  </ul>
+  <div class="callout warn">
+    <strong>Important:</strong> the client only sent us sales-side data. So every real booking we have right now is <code>milestone_in</code>. The three "money out" lines are estimated later, in Step 3, from a margin assumption.
+  </div>
+  <p>We also pull a <strong>monthly revenue summary</strong> from a JSON file the client gave us. This file is the only source that includes Andijk — so the dashboard can still show all four companies side by side, even though we only have detailed bookings for three.</p>
+</section>
+
+<section>
+  <h2><span class="step">Step 3 of 5</span>Predict the next 13 weeks (Gold layer — Forecast)</h2>
+  <p>This is the heart of the dashboard. For each company, for each of the next 13 weeks, for each of three scenarios, we predict money in and money out.</p>
+
+  <h3>Three plain-English rules</h3>
+  <p><strong>Money in (next 13 weeks).</strong> The CFO told us customers pay invoices about <strong>30 days</strong> after receiving them. So next week's cash receipts equal the invoices we sent ~30 days ago. For weeks beyond what we have data for, we predict invoicing from the recent weekly average, adjusted for the time of year (roofing has a strong summer peak, quiet winter).</p>
+
+  <p><strong>Money out.</strong> We don't have supplier data yet, so we estimate it. A roofing company typically keeps about <strong>22% of revenue as gross profit</strong>, so ~78% goes out as costs. We split those costs across materials, subcontractors and wages using a default mix — when real supplier data arrives, we just update the numbers.</p>
+
+  <p><strong>Three scenarios.</strong> The wet/dry scenarios are the weather toggle the challenge asks for.</p>
+  <div class="scenarios">
+    <div class="s base"><b>Base</b><p>Business as usual.</p></div>
+    <div class="s wet"><b>Wet quarter</b><p>Rain delays work. Revenue −10% and payments take 7 extra days for the first 6 weeks.</p></div>
+    <div class="s dry"><b>Dry quarter</b><p>Great weather. Revenue +5% and payments arrive 3 days faster for the first 6 weeks.</p></div>
+  </div>
+
+  <div class="callout">
+    <strong>No AI, no machine learning.</strong> The CFO would never sign off on a number that came from a black box. Every forecast figure traces back to specific bookings plus named assumptions, so a controller can defend any number on the dashboard.
+  </div>
+
+  <h3>How "confident" each forecast number is</h3>
+  <p>Each week's prediction is tagged with how much real data went into it:</p>
+  <ul>
+    <li><strong>Observed</strong> — the receipts come from invoices already sent. Real numbers.</li>
+    <li><strong>Mixed</strong> — partly real, partly predicted.</li>
+    <li><strong>Projected</strong> — fully predicted from recent rate + seasonality.</li>
+    <li><strong>Derived</strong> — always used for the "money out" lines (estimated, not observed).</li>
+  </ul>
+  <p>The dashboard uses these tags to colour-code certainty (solid lines vs dashed).</p>
+</section>
+
+<section>
+  <h2><span class="step">Step 4 of 5</span>Check the safety limits (Gold layer — Covenant)</h2>
+  <p>When a private-equity firm or a bank lends money to a company, they put rules in the loan contract — for example, "<em>you must keep at least €X in the bank at all times</em>". These rules are called <strong>covenants</strong>. Breaking one can trigger penalties or even let the lender call the loan back, so the CFO watches the cash buffer constantly.</p>
+  <p><strong>"Headroom"</strong> is just the gap between current cash and the minimum the contract requires. Lots of headroom = relaxed. Headroom shrinking = time to act.</p>
+
+  <div class="callout warn">
+    <strong>Placeholder warning:</strong> we don't have the real covenant document yet (the client promised to send it). For now we use a stand-in rule — keep cash above ~6 weeks of recent revenue, starting from €1M in the bank. The dashboard must label these numbers as PLACEHOLDER until the real terms arrive.
+  </div>
+
+  <h3>Traffic-light status per week</h3>
+  <p>For every company × scenario × week, we give a colour:</p>
+  <table>
+    <tbody>
+      <tr><td><span class="dot g"></span><strong>OK</strong></td><td>Cash comfortably above the floor. Nothing to worry about.</td></tr>
+      <tr><td><span class="dot y"></span><strong>Watch</strong></td><td>Within 20% of the floor — the CFO should pay attention.</td></tr>
+      <tr><td><span class="dot r"></span><strong>Breach</strong></td><td>Below the floor — the covenant is broken.</td></tr>
+    </tbody>
+  </table>
+  <p>We also produce one <strong>consolidated view</strong> that adds all four companies together — that's the line the PE board cares about on their monthly update slide.</p>
+</section>
+
+<section>
+  <h2><span class="step">Step 5 of 5</span>Copy everything out for the dashboard</h2>
+  <p>The dashboard team can't read our Parquet files directly, so we copy every gold table into the Azure SQL database. From there the frontend can query like any normal database.</p>
+  <table>
+    <thead><tr><th>Table</th><th>What's in it</th><th>Rows</th></tr></thead>
+    <tbody>
+      <tr><td><code>gold_bookings_classified</code></td><td>Every booking with company + cash-type labels</td><td>31,734</td></tr>
+      <tr><td><code>gold_portfolio_kpi_monthly</code></td><td>Monthly revenue per company (incl. Andijk)</td><td>141</td></tr>
+      <tr><td><code>gold_cashflow_history_weekly</code></td><td>Past weekly cash, per company × cash type</td><td>1,908</td></tr>
+      <tr><td><code>gold_cashflow_forecast_13w</code></td><td>Next 13 weeks: company × type × scenario</td><td>624</td></tr>
+      <tr><td><code>gold_assumptions</code></td><td>The knobs the controller can edit</td><td>12</td></tr>
+      <tr><td><code>gold_covenant_headroom</code></td><td>Traffic-light status per company × scenario × week</td><td>156</td></tr>
+      <tr><td><code>gold_cashflow_consolidated_13w</code></td><td>Portfolio-wide view for the PE board</td><td>156</td></tr>
+      <tr><td><code>gold_cashflow_consolidated_net_13w</code></td><td>Portfolio-wide net cash + cumulative</td><td>39</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>If something changes</h2>
+  <p>The pipeline is built so that the team can update things without touching code:</p>
+  <ul>
+    <li>The client sends new Excel files &rarr; drop them in the <code>raw/</code> folder, rerun notebook 03 onward.</li>
+    <li>The CFO gives us a new DSO or margin number &rarr; edit the <code>ASSUMPTIONS</code> table in notebook 06.</li>
+    <li>The covenant document arrives &rarr; replace the placeholder floor in notebook 07.</li>
+    <li>The client adds new account categories (e.g. supplier invoices) &rarr; add them to the <code>GL_DRIVER_MAP</code> table in notebook 05; no code change needed.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Glossary</h2>
+  <table>
+    <tbody>
+      <tr><td><strong>Booking</strong></td><td>One row in an accounting ledger — a single money movement.</td></tr>
+      <tr><td><strong>Portco</strong></td><td>"Portfolio company". One of the four roofing businesses.</td></tr>
+      <tr><td><strong>GL account</strong></td><td>Dutch accounting category number (<em>Grootboekrekening</em>).</td></tr>
+      <tr><td><strong>VAT (BTW)</strong></td><td>Dutch sales tax. <em>Verlegd</em> = the buyer pays the VAT instead of the seller (common in construction).</td></tr>
+      <tr><td><strong>DSO</strong></td><td>Days Sales Outstanding — how long customers take to pay. Here, 30 days.</td></tr>
+      <tr><td><strong>Gross margin</strong></td><td>The slice of revenue you keep after direct costs. Here, 22%.</td></tr>
+      <tr><td><strong>Driver</strong></td><td>A category of cash movement (sales in, materials out, etc.).</td></tr>
+      <tr><td><strong>Covenant</strong></td><td>A rule in a loan contract — typically a minimum cash level.</td></tr>
+      <tr><td><strong>Headroom</strong></td><td>The slack between current cash and the covenant floor.</td></tr>
+      <tr><td><strong>Anchor date</strong></td><td>The most recent date in our data. Up to here: real. After: predicted.</td></tr>
+      <tr><td><strong>Silver / Gold</strong></td><td>Data-engineering stages. Silver = cleaned up. Gold = ready for the dashboard.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<footer>
+  Altis hackathon · pipeline built in Databricks (notebooks 03 → 08) · this document covers Tier 1.
+</footer>
+
+</div>
+</body>
+</html>

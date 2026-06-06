@@ -62,17 +62,24 @@ gold_c = svc.get_container_client(GOLD)
 
 # COMMAND ----------
 
+# CFO-stated process (2026-06-06):
+#   - Invoice is sent ≤ 7 days after signing the acceptance document
+#   - Invoices are paid within 30 days
+# So total cash lag from acceptance ≈ 37 days. Our ledger `booking_date` is the
+# invoice booking date, so DSO from booking_date = 30 days. The 7-day
+# acceptance→invoice lag is implicit in the historical invoicing baseline we
+# project from (we forecast invoicing rate, not acceptance rate).
 ASSUMPTIONS = {
-    "peter_ummels": {"dso_days": 42, "gross_margin": 0.22,
+    "peter_ummels": {"dso_days": 30, "invoice_lag_days": 7, "gross_margin": 0.22,
                      "materials_share": 0.45, "subcon_share": 0.35, "labour_share": 0.20,
                      "growth_yoy": 0.00},
-    "heeze":        {"dso_days": 35, "gross_margin": 0.22,
+    "heeze":        {"dso_days": 30, "invoice_lag_days": 7, "gross_margin": 0.22,
                      "materials_share": 0.45, "subcon_share": 0.35, "labour_share": 0.20,
                      "growth_yoy": 0.00},
-    "winschoten":   {"dso_days": 50, "gross_margin": 0.22,
+    "winschoten":   {"dso_days": 30, "invoice_lag_days": 7, "gross_margin": 0.22,
                      "materials_share": 0.45, "subcon_share": 0.35, "labour_share": 0.20,
                      "growth_yoy": 0.00},
-    "andijk":       {"dso_days": 40, "gross_margin": 0.22,
+    "andijk":       {"dso_days": 30, "invoice_lag_days": 7, "gross_margin": 0.22,
                      "materials_share": 0.45, "subcon_share": 0.35, "labour_share": 0.20,
                      "growth_yoy": 0.00},
 }

@@ -153,14 +153,34 @@ Scenarios: Base / Wet-quarter / Dry-quarter. Wet-quarter shifts `dso` up by ~7 d
 
 | # | Notebook | Output | Status |
 |---|----------|--------|--------|
-| 01 | `01_connect_storage.py` | explore `raw/database.xlsx` (now legacy) | ✅ done |
-| 02 | `02_explore_received_data.py` | full inventory snapshot | ✅ done |
-| 03 | `03_silver_cleanse.py` | `silver/by_source/*.parquet` + `silver/bookings.parquet` | 🏗️ next |
-| 04 | `04_silver_validate.py` | cross-check silver vs. aggregated JSON totals | next |
-| 05 | `05_gold_classify.py` | `gold/bookings_classified.parquet` (driver per row) | **🛑 Tier 1 data foundation** |
-| 06 | `06_gold_forecast_13w.py` | `gold/cashflow_forecast_13w.parquet` + assumptions table | |
-| 07 | `07_gold_covenant_scenario.py` | covenant headroom + base / wet / dry scenarios | **🛑 Tier 1 submittable** |
-| 08+ | weather attribution, role-marts, dashboard | Tier 2 reach | |
+| 01 | `01_connect_storage.py` | explore `raw/database.xlsx` (legacy single-file view) | ✅ done |
+| 02 | `02_explore_received_data.py` | full inventory snapshot of `raw/received_original_data/` | ✅ done |
+| 03 | `03_silver_cleanse.py` | `silver/by_source/*.parquet` + `silver/bookings.parquet` (31,734 dedup rows) | ✅ done |
+| 04 | `04_validate_and_identify.py` | portco identity resolution (peter_ummels / heeze / winschoten / andijk) | ✅ done |
+| 05 | `05_gold_classify.py` | `gold/bookings_classified.parquet` + `gold/portfolio_kpi_monthly.parquet` | ✅ done |
+| 06 | `06_gold_forecast.py` | `gold/cashflow_forecast_13w.parquet` + history + assumptions | ✅ done |
+| 07 | `07_gold_covenant.py` | covenant headroom (placeholder) + consolidated PE view | ✅ **🛑 Tier 1 SHIPPED** |
+| 08+ | weather attribution, project/WIP, AP-side, polish | Tier 2 reach | next |
+
+## What's in gold/ now (ready for the frontend)
+
+- `bookings_classified.parquet` — 31,734 rows, portco-resolved, driver-tagged
+- `portfolio_kpi_monthly.parquet` — KPI roll-up covering all 4 portcos (includes andijk)
+- `cashflow_history_weekly.parquet` — historical weekly cash per portco × driver
+- `cashflow_forecast_13w.parquet` — 624 rows (4 portcos × 13 weeks × 4 drivers × 3 scenarios)
+- `assumptions.parquet` — per-portco × scenario knobs (DSO, margin, splits)
+- `covenant_headroom.parquet` — placeholder cash-floor headroom per portco × scenario × week
+- `cashflow_consolidated_13w.parquet` + `cashflow_consolidated_net_13w.parquet` — PE board lens
+- `_meta/portco-mapping-latest.json`, `gl_driver_mapping.json`, snapshot files per run
+
+## Validation outcomes (from notebook 05)
+
+| Portco | 2023 Δ | 2024 Δ | 2025 Δ |
+|---|---|---|---|
+| peter_ummels | +0.03% | +0.23% | -1.1% |
+| winschoten   | -1.1%  | -0.8%  | -1.7% |
+| heeze        | gap explained — JSON had floor estimate only | | |
+| andijk       | KPI only — no Tx | | |
 
 ## Open questions for the team (track here, don't block)
 

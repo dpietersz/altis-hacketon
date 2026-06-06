@@ -18,6 +18,7 @@
   - winschoten ~ €7.7M (also: 2023 €7.2M, 2025 €8.2M)
   - heeze ~ €12.1M (likely understated in JSON's "floor estimate")
   - andijk ~ €15.8M (KPI only)
+- **Cash-lag policy (CFO-confirmed 2026-06-06):** Invoice is sent **≤ 7 days after the client signs the acceptance document**, and **invoices are paid within 30 days**. Total cash lag from acceptance ≈ **37 days**. Our `booking_date` is the invoice booking date, so **DSO from `booking_date` is 30 days exactly**, uniform across all portcos — no longer a controller-guessed parameter, it's an observed business policy. The 7-day acceptance→invoice lag is implicit in the historical invoicing baseline we forecast from.
 
 ## What we DON'T have (label these as mocked / placeholder)
 

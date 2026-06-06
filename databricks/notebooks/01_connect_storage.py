@@ -61,19 +61,88 @@ data = blob.download_blob().readall()
 print(f"Downloaded {len(data):,} bytes")
 
 sheets = pd.read_excel(io.BytesIO(data), sheet_name=None)
-print(f"Loaded {len(sheets)} sheet(s): {list(sheets)}")
+sheet_name = next(iter(sheets))
+pdf = sheets[sheet_name]
+print(f"Sheet: {sheet_name} · shape: {pdf.shape}")
 
-summary = {"bytes": len(data), "sheets": {}}
-for name, frame in sheets.items():
-    rows, cols = frame.shape
-    summary["sheets"][name] = {
-        "rows": rows,
-        "cols": cols,
-        "columns": list(frame.columns.astype(str)),
-        "head": frame.head(3).astype(str).to_dict(orient="records"),
-    }
-    print(f"--- {name} {frame.shape} ---")
-    print(frame.head().to_string())
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Pandas preview
+
+# COMMAND ----------
+
+display(pdf.head(20))
+print("\n=== dtypes ===")
+print(pdf.dtypes.to_string())
+print("\n=== describe (numeric) ===")
+print(pdf.describe(include="number").to_string())
+print("\n=== nulls per column ===")
+print(pdf.isna().sum().to_string())
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Convert to PySpark DataFrame
+# MAGIC
+# MAGIC On serverless we round-trip via Arrow. The Spark DataFrame gets the same
+# MAGIC rows; type inference comes from pandas.
+
+# COMMAND ----------
+
+# Pandas leaves NaN floats in money columns — Spark Connect Arrow chokes on
+# Object columns with mixed types, so cast NaN→None first.
+pdf_clean = pdf.where(pdf.notna(), None)
+
+sdf = spark.createDataFrame(pdf_clean)
+print("=== schema ===")
+sdf.printSchema()
+print(f"\nrow count: {sdf.count():,}")
+sdf.show(20, truncate=False)
+display(sdf)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Quick aggregations to prove Spark is usable
+
+# COMMAND ----------
+
+from pyspark.sql import functions as F
+
+by_company = (
+    sdf.groupBy("company")
+    .agg(
+        F.count("*").alias("rows"),
+        F.round(F.sum(F.coalesce(F.col("debit").cast("double"), F.lit(0.0))), 2).alias("debit_total"),
+        F.round(F.sum(F.coalesce(F.col("credit").cast("double"), F.lit(0.0))), 2).alias("credit_total"),
+    )
+    .orderBy(F.desc("rows"))
+)
+by_company.show(20, truncate=False)
+
+by_ledger = (
+    sdf.groupBy("ledger")
+    .agg(F.count("*").alias("rows"))
+    .orderBy(F.desc("rows"))
+)
+by_ledger.show(20, truncate=False)
+
+# COMMAND ----------
 
 # Surface structured result to `databricks jobs get-run-output`
-dbutils.notebook.exit(json.dumps(summary))
+summary = {
+    "bytes": len(data),
+    "sheet": sheet_name,
+    "rows": int(pdf.shape[0]),
+    "cols": int(pdf.shape[1]),
+    "columns": list(pdf.columns.astype(str)),
+    "dtypes": {c: str(t) for c, t in pdf.dtypes.items()},
+    "nulls": {c: int(n) for c, n in pdf.isna().sum().items()},
+    "head": pdf.head(5).astype(str).to_dict(orient="records"),
+    "spark_schema": [(f.name, f.dataType.simpleString()) for f in sdf.schema.fields],
+    "spark_row_count": sdf.count(),
+    "top_companies": [r.asDict() for r in by_company.limit(10).collect()],
+    "top_ledgers": [r.asDict() for r in by_ledger.limit(10).collect()],
+}
+dbutils.notebook.exit(json.dumps(summary, default=str))

@@ -50,14 +50,18 @@
 - Wide format: GL row × month col × yearly sheet
 - Sanity check only — not part of the unified ledger
 
-## Portco → source mapping (working hypothesis)
+## Portco → source mapping (CONFIRMED — notebook 04)
 
-| Portco | Likely source files |
-|--------|-------|
-| `peter_ummels` | `portfolio company 2 data/` (admin 82604, Yuki) |
-| `winschoten` / `andijk` / `heeze` | One of: `portfolio company data/` (Exact), `datasets/Altis dataset 2.xlsx` yearly, `Company E 2026` |
+| Portco | City | Source | Coverage |
+|--------|------|--------|----------|
+| `peter_ummels` | Brunssum, Limburg | `portfolio company 2 data/` (Yuki, admin 82604) | full Tx, ~9.8K rows |
+| `heeze` | Noord-Brabant | `portfolio company data/` (Exact, GB 8000/8001/8002) | full Tx, ~12.1K rows |
+| `winschoten` | Groningen | `datasets/Altis dataset 2.xlsx` yearly sheets | full Tx, ~12.3K rows |
+| `andijk` | Noord-Holland | `datasets/Altis dataset 1.xlsx` (KPI roll-up only) | **NO Tx — monthly KPI only** |
 
-We'll cross-check against the aggregated JSON's monthly totals in notebook 03.
+Confirmation: JSON `description` fields + revenue matching against `winschoten.revenue` (2023 sum €7.16M ↔ silver dataset2 2023 net €7.16M = exact match).
+
+For andijk we render historical aggregates only; forecast features show "aggregate only — no transactional data" for that portco.
 
 ## Critical gap: NO AP-side data
 

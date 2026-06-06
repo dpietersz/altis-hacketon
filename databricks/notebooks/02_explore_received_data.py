@@ -211,29 +211,6 @@ print(f"wrote gold/{fname}")
 
 # COMMAND ----------
 
-# A compact summary (no raw 15-row dumps) for the CLI output — full version is in gold/_meta/
-compact = {
-    "captured_at": now.isoformat(timespec="seconds"),
-    "snapshot_blob": f"gold/{fname}",
-    "files": [
-        {
-            "rel": f["rel"],
-            "ext": f["ext"],
-            "size_bytes": f["size_bytes"],
-            "error": f["error"],
-            "sheets": [
-                {
-                    "sheet": s["sheet"],
-                    "raw_shape": s["raw_shape"],
-                    "guessed_header_row": s["guessed_header_row"],
-                    "inferred_columns_after_header": s["inferred_columns_after_header"],
-                    "data_rows_after_header": s["data_rows_after_header"],
-                }
-                for s in f["sheets"]
-            ],
-            "top_raw_rows": f.get("top_raw_rows"),
-        }
-        for f in inventory["files"]
-    ],
-}
-dbutils.notebook.exit(json.dumps(compact, default=str))
+# Return the FULL inventory (including first-15 raw rows per sheet) so the
+# terminal can understand the data structure. Snapshot already written above.
+dbutils.notebook.exit(json.dumps({"snapshot_blob": f"gold/{fname}", **inventory}, default=str))

@@ -24,3 +24,10 @@ build/
 
 # Databricks
 .databricks/
+
+# Altis data (must be deleted post-event; keep out of git)
+Altis Groep*.json
+datasets/
+portfolio company*/
+received_original_data/
+*.xlsx

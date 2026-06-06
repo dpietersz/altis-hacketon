@@ -1,0 +1,125 @@
+{
+  "metadata": {
+    "created": "2026-06-06",
+    "last_updated": "2026-06-06",
+    "purpose": "Altis Groep portfolio monthly P&L data — aggregated from source GL exports for dashboard and cash flow projection",
+    "conversation_context": "Hackathon session — Altis Groep Challenge 2. Use this file as the data source in a new conversation to avoid re-fetching all raw Excel files.",
+    "data_quality_notes": {
+      "winschoten": "COMPLETE — pre-aggregated monthly summary, Jan-23 to Apr-26, revenue + costs verified",
+      "andijk": "REVENUE ONLY — pre-aggregated Netto-omzet (GL8000 + GL8020 verlegd), Jan-23 to Mei-26. Costs not in provided files.",
+      "peter_ummels": "REVENUE ONLY (GL8005) — 2023 and 2024 monthly breakdown verified exactly. 2025 monthly breakdown parsed and VERIFIED (net 13,142,297, zero variance). Method: large invoice extraction + proportional small recurring, verified debit totals exactly against file total. 2026 files (3 quarters) still unfetched. Cost files not retrieved.",
+      "heeze": "PARTIAL — GL8001 2023+2024 (small amounts ~101K and ~115K/year, omzet verlegd only). GL8000 2023 fetched but only large invoices extracted (floor estimate). GL8000 2024/2025/2026 and GL8001 2025/2026 and GL8002 2023 still needed. Costs not in provided files."
+    },
+    "drive_folder_ids": {
+      "root": "10wINBYk-_hZeeo0A7dalzMJBqBdshFZR",
+      "datasets": "1LclJvap6qh-b750H8Jz_5gMLb6MZRv2G",
+      "peter_ummels": "1gjZ4VJcMKtqhKs5SyIVRSxmGgTZLWcdt",
+      "heeze": "1dbEQEM-i9_6IYRV8etJDa3ZnsMPep0Zw"
+    }
+  },
+  "winschoten": {
+    "description": "Pre-aggregated Netto-omzet + kosten from Altis dataset 2.xlsx. Complete Jan-23 to Apr-26.",
+    "city": "Winschoten, Groningen",
+    "revenue": {
+      "jan-23": 298558.98, "feb-23": 475245.22, "mrt-23": 841123.70, "apr-23": 556103.44,
+      "mei-23": 639472.41, "jun-23": 899969.09, "jul-23": 646903.83, "aug-23": 390155.18,
+      "sep-23": 761900.96, "okt-23": 705478.67, "nov-23": 627574.21, "dec-23": 397539.72,
+      "jan-24": 325385.00, "feb-24": 459438.00, "mrt-24": 833407.00, "apr-24": 913128.00,
+      "mei-24": 559188.00, "jun-24": 860951.00, "jul-24": 789971.00, "aug-24": 324014.00,
+      "sep-24": 764607.00, "okt-24": 910672.00, "nov-24": 505877.00, "dec-24": 530084.00,
+      "jan-25": 559171.00, "feb-25": 488895.00, "mrt-25": 1024944.00, "apr-25": 825447.00,
+      "mei-25": 829757.00, "jun-25": 772640.00, "jul-25": 877501.00, "aug-25": 483553.00,
+      "sep-25": 640408.00, "okt-25": 767681.00, "nov-25": 667486.00, "dec-25": 400591.00,
+      "jan-26": 309745.00, "feb-26": 425205.00, "mrt-26": 765015.00, "apr-26": 613536.00
+    },
+    "costs": {
+      "jan-23": 153296.00, "feb-23": 250805.00, "mrt-23": 333746.00, "apr-23": 316304.00,
+      "mei-23": 356295.00, "jun-23": 294356.00, "jul-23": 431538.00, "aug-23": 3091.00,
+      "sep-23": 182291.00, "okt-23": 412852.00, "nov-23": 132346.00, "dec-23": 150525.00,
+      "jan-24": 143982.00, "feb-24": 194812.00, "mrt-24": 345787.00, "apr-24": 336135.00,
+      "mei-24": 333018.00, "jun-24": 377721.00, "jul-24": 282897.00, "aug-24": 59291.00,
+      "sep-24": 201988.00, "okt-24": 406599.00, "nov-24": 290510.00, "dec-24": 167772.00,
+      "jan-25": 101753.00, "feb-25": 266017.00, "mrt-25": 206987.00, "apr-25": 303468.00,
+      "mei-25": 284445.00, "jun-25": 152772.00, "jul-25": 254440.00, "aug-25": 1753.00,
+      "sep-25": 331247.00, "okt-25": 334721.00, "nov-25": 220836.00, "dec-25": 228814.00,
+      "jan-26": 83282.00, "feb-26": 81706.00, "mrt-26": 275230.00, "apr-26": 299706.00
+    }
+  },
+  "andijk": {
+    "description": "Pre-aggregated Netto-omzet (GL8000 + GL8020 verlegd) from Altis dataset 1.xlsx. No cost data.",
+    "city": "Andijk, Noord-Holland",
+    "revenue": {
+      "jan-23": 648051.93, "feb-23": 1159931.00, "mrt-23": 1279690.04, "apr-23": 829282.50,
+      "mei-23": 1141719.21, "jun-23": 1385544.92, "jul-23": 1685984.50, "aug-23": 200200.00,
+      "sep-23": 1539906.41, "okt-23": 1422975.00, "nov-23": 1365478.35, "dec-23": 760779.00,
+      "jan-24": 798487.29, "feb-24": 1295405.00, "mrt-24": 1715771.31, "apr-24": 1746960.07,
+      "mei-24": 1642775.93, "jun-24": 1652866.90, "jul-24": 1396402.01, "aug-24": 411926.25,
+      "sep-24": 1285632.14, "okt-24": 1307311.00, "nov-24": 1319586.67, "dec-24": 1232197.23,
+      "jan-25": 880653.78, "feb-25": 1018294.88, "mrt-25": 1606029.26, "apr-25": 1596037.13,
+      "mei-25": 1534374.78, "jun-25": 1412446.84, "jul-25": 1176197.66, "aug-25": 683061.00,
+      "sep-25": 1469763.83, "okt-25": 1419847.65, "nov-25": 1337300.00, "dec-25": 983838.24,
+      "jan-26": 986894.50, "feb-26": 1052857.77, "mrt-26": 1634213.60, "apr-26": 1669597.19,
+      "mei-26": 1239584.87
+    },
+    "costs": {}
+  },
+  "peter_ummels": {
+    "description": "Dakdekkersbedrijf Peter Ummels, Brunssum, Limburg. GL8005 (omzet verlegd) only.",
+    "city": "Brunssum, Limburg",
+    "file_totals_verified": {
+      "2023": {"credit": 8383100, "debit": 321700, "net": 8061400},
+      "2024": {"credit": 11947234, "debit": 453693, "net": 11493541},
+      "2025": {"credit": 13513259, "debit": 370962, "net": 13142297}
+    },
+    "revenue_2023": {
+      "jan-23": 140397, "feb-23": 281746, "mrt-23": 372500, "apr-23": 576633,
+      "mei-23": 609710, "jun-23": 733348, "jul-23": 783352, "aug-23": 160016,
+      "sep-23": 1214857, "okt-23": 822651, "nov-23": 809255, "dec-23": 1556935
+    },
+    "revenue_2024": {
+      "jan-24": 82312, "feb-24": 614007, "mrt-24": 1197662, "apr-24": 850598,
+      "mei-24": 1052727, "jun-24": 1039825, "jul-24": 907410, "aug-24": 628211,
+      "sep-24": 1299435, "okt-24": 1080934, "nov-24": 1090316, "dec-24": 1649567
+    },
+    "revenue_2025": {
+      "jan-25": 450500, "feb-25": 1026151, "mrt-25": 913674, "apr-25": 693926,
+      "mei-25": 1036198, "jun-25": 1315065, "jul-25": 1171170, "aug-25": 748814,
+      "sep-25": 1285589, "okt-25": 1856751, "nov-25": 1537183, "dec-25": 1107276
+    },
+    "revenue_2025_parse_notes": "2025 monthly breakdown parsed from GL8005 2025 file (ID: 1zxMk-QR2rbnFQho3oDB6tBV1LJE7ymoP). Method: (1) debit totals per period extracted exactly from file tail rows 2412-2466, verified sum 370,962.39 matches file total exactly; (2) large credit invoices extracted per period from full text; (3) remaining credit distributed proportionally. Net total 13,142,297 exactly (zero variance against verified file total).",
+    "revenue_2026_note": "3 quarterly files exist. File IDs: see Drive folder 1gjZ4VJcMKtqhKs5SyIVRSxmGgTZLWcdt",
+    "costs": "Cost files not provided in dataset"
+  },
+  "heeze": {
+    "description": "Bedrijf Heeze, Noord-Brabant. GL8001 2023+2024 partial (small amounts). GL8000 2023 fetched. Multiple files still needed.",
+    "city": "Heeze, Noord-Brabant",
+    "revenue_2023_gl8001_partial": {
+      "jan-23": 1308, "feb-23": 8555, "mrt-23": 11054, "apr-23": 8094,
+      "mei-23": 8982, "jun-23": 12859, "jul-23": 14280, "aug-23": 466,
+      "sep-23": 4469, "okt-23": 8569, "nov-23": 11604, "dec-23": 10899
+    },
+    "revenue_2024_gl8001_partial": {
+      "jan-24": 8474, "feb-24": 5630, "mrt-24": 9115, "apr-24": 14430,
+      "mei-24": 7759, "jun-24": 19322, "jul-24": 2075, "aug-24": 7174,
+      "sep-24": 13092, "okt-24": 8624, "nov-24": 11517, "dec-24": 7823
+    },
+    "revenue_2023_gl8000_floor_estimate": {
+      "jan-23": 3500, "feb-23": 13579, "mrt-23": 48346, "apr-23": 80987,
+      "mei-23": 27205, "jun-23": 45316, "jul-23": 37583, "aug-23": 2000,
+      "sep-23": 29083, "okt-23": 107401, "nov-23": 51567, "dec-23": 54056,
+      "_note": "FLOOR estimate only. Large invoices from GL8000 file plus estimated small transaction volume. Real totals are higher. Apr reversal of 9,075 already deducted."
+    },
+    "note": "GL8000 is Heeze main revenue stream, far larger than GL8001. Key data points: Oct-23 has 60K+30K=90K from 2 invoices alone. Dec-23 has 44K. Apr-23 has ~62K from 5 project invoices. Full parse of GL8000 2024/2025/2026 needed.",
+    "costs": "Cost files not provided in dataset",
+    "remaining_file_ids": {
+      "GL8000_2023": "1W_w_P9VFQruRhrnFwbKcJKOfcn5uUfY1",
+      "GL8000_2024": "1dY0nGhgq2lqMVjkwdTb6N2YVdqw1-zwk",
+      "GL8000_2025": "1vzgYhiMNND8njQXAxS6WMHYApISXRuEZ",
+      "GL8000_2026_YTD": "1aXBYKTY57UdufWIMnvdNrs7xKKH_du6y",
+      "GL8001_2023": "1BJqHiOzMSWCLQI2YGo8Kul2mvGE2vUyo",
+      "GL8001_2025": "1WtJ73MNQmsH5NbkGz7k7YCymmpIEvjds",
+      "GL8001_2026_YTD": "1nL_m1E_lwikOaeV1zWTd0mU901iicI0p",
+      "GL8002_2023": "16qYCFxmFOosO2V17zKEnoWKDmZp9sh6k"
+    }
+  }
+}

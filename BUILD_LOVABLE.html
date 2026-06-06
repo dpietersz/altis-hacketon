@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Altis — Build the Lovable frontend</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --card: #ffffff; --ink: #1c1c1c; --muted: #5e6470;
+    --line: #e4e4df; --accent: #2e5d4f; --accent-soft: #e9efea;
+    --warn: #b85c00; --warn-soft: #fff2e3;
+    --info: #1f5b8b; --info-soft: #e8f1f8;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); }
+  body { font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 56px 24px 96px; }
+  header.hero { margin-bottom: 40px; }
+  header.hero .tag { color: var(--accent); font-weight: 600; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
+  header.hero h1 { font-size: 32px; line-height: 1.2; margin: 0 0 12px; letter-spacing: -0.01em; }
+  header.hero p.sub { font-size: 18px; color: var(--muted); margin: 0; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 28px 30px 22px; margin: 0 0 22px; }
+  section h2 { font-size: 22px; margin: 0 0 6px; letter-spacing: -0.01em; }
+  section h2 .step { display: block; color: var(--accent); font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 4px; }
+  section h3 { font-size: 16px; margin: 22px 0 6px; }
+  section p { margin: 10px 0; }
+  ul, ol { padding-left: 22px; }
+  ul li, ol li { margin: 4px 0; }
+  code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; }
+  code { background: #f1f1ec; padding: 1px 6px; border-radius: 4px; }
+  pre { background: #fafaf7; border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; overflow-x: auto; line-height: 1.45; }
+  .callout { border-left: 3px solid var(--info); background: var(--info-soft); padding: 12px 16px; border-radius: 8px; margin: 14px 0; font-size: 15px; }
+  .callout.warn { border-left-color: var(--warn); background: var(--warn-soft); }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 15px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 600; background: #fafaf7; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  footer { text-align: center; color: var(--muted); font-size: 13px; margin-top: 40px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="tag">Altis hackathon — frontend</div>
+  <h1>Build the Lovable frontend</h1>
+  <p class="sub">How to clone, install and run the dashboard locally. Then how to point it at the Azure SQL backend.</p>
+</header>
+
+<section>
+  <h2>What this frontend is</h2>
+  <p>The dashboard is built in <a href="https://lovable.dev">Lovable</a>, a visual AI builder that generates a standard <strong>Vite + React + TypeScript + Tailwind + shadcn/ui</strong> project under the hood. Editor: <code>https://lovable.dev/projects/e0af25e0-3233-4d46-939c-587389f1498d</code>.</p>
+  <p>Once exported, the project is a normal Node/Vite app — no Lovable runtime needed. The judges can clone &amp; run it like any web project.</p>
+</section>
+
+<section>
+  <h2><span class="step">Step 1</span>Get the source code into this repo</h2>
+  <p>Lovable lets you push the project to GitHub or download as a ZIP. Either way, the code should land in <code>frontend/</code> at the root of this repo.</p>
+  <h3>Option A — Lovable &rarr; GitHub (recommended)</h3>
+  <ol>
+    <li>Open the Lovable project</li>
+    <li>Top-right menu &rarr; <em>Connect to GitHub</em> (one-time auth)</li>
+    <li><em>Push to GitHub</em> &rarr; pick a new repo (e.g. <code>altis-frontend</code>)</li>
+    <li>Add it to this repo as a subtree or copy the files into <code>frontend/</code></li>
+  </ol>
+  <h3>Option B — Direct download</h3>
+  <ol>
+    <li>Lovable project &rarr; <em>...</em> menu &rarr; <em>Download as ZIP</em></li>
+    <li>Unzip into <code>frontend/</code> at the repo root</li>
+  </ol>
+</section>
+
+<section>
+  <h2><span class="step">Step 2</span>Install dependencies and run locally</h2>
+  <p>Lovable projects use the standard JS toolchain. We recommend <a href="https://bun.sh">Bun</a>, but <code>npm</code> or <code>pnpm</code> also work.</p>
+  <pre>cd frontend
+bun install              # or npm install / pnpm install
+bun run dev              # or npm run dev / pnpm dev</pre>
+  <p>The dev server typically starts on <code>http://localhost:5173</code>.</p>
+  <h3>Build for production</h3>
+  <pre>bun run build
+bun run preview          # serves the prod build locally to verify</pre>
+</section>
+
+<section>
+  <h2><span class="step">Step 3</span>Connect it to the Azure SQL backend</h2>
+  <p>Azure SQL doesn't accept connections straight from a browser (CORS + no native TLS proxy). The Lovable app needs a thin server proxy. There are two clean patterns:</p>
+
+  <h3>Pattern A — Lovable's built-in backend (Supabase)</h3>
+  <p>Lovable can wire a Supabase project to your frontend automatically. We can then write Supabase edge functions that query Azure SQL using <code>mssql</code>/<code>tedious</code> and serve JSON to the frontend. Connection details from <code>HANDOFF_LOVABLE.md</code> go in the edge function as Supabase secrets.</p>
+
+  <h3>Pattern B — Tiny Node API in this repo</h3>
+  <p>If we don't use Supabase, ship a minimal Node/Express or Hono server alongside the frontend that proxies SQL queries and returns JSON. Quick scaffold:</p>
+  <pre>mkdir -p api && cd api
+bun init -y
+bun add hono mssql
+# server.ts — see HANDOFF_LOVABLE.md for the SQL queries</pre>
+
+  <div class="callout"><strong>Credentials.</strong> Do NOT put the SQL password in the frontend code — it would ship to the browser. Always read it server-side from an environment variable. The dev-time values are listed in <a href="HANDOFF_LOVABLE.md">HANDOFF_LOVABLE.md</a>.</div>
+</section>
+
+<section>
+  <h2><span class="step">Step 4</span>What the dashboard reads</h2>
+  <p>All charts pull from the gold tables in <code>altis.database.windows.net</code> &rarr; database <code>altis</code>. The full table list and one paste-ready SQL query per chart live in <a href="HANDOFF_LOVABLE.md">HANDOFF_LOVABLE.md</a>. Headline tables:</p>
+  <table>
+    <thead><tr><th>Table</th><th>Used for</th></tr></thead>
+    <tbody>
+      <tr><td><code>gold_cashflow_forecast_13w</code></td><td>Tier 1 forecast (CFO view)</td></tr>
+      <tr><td><code>gold_covenant_headroom</code></td><td>Traffic-light covenant gauge</td></tr>
+      <tr><td><code>gold_cashflow_consolidated_net_13w</code></td><td>Portfolio view (PE board)</td></tr>
+      <tr><td><code>gold_workable_days_monthly</code></td><td>Tier 2 headline: bar (workable days) + line (revenue)</td></tr>
+      <tr><td><code>gold_bookings_classified</code></td><td>Drill-down / traceability panel</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2><span class="step">Step 5</span>Deploy (optional)</h2>
+  <p>For the demo, running locally with <code>bun run dev</code> is enough. To put it on the public web:</p>
+  <ul>
+    <li><strong>Lovable Publish</strong> — easiest. Click <em>Publish</em> in the Lovable UI; it deploys to <code>&lt;slug&gt;.lovable.app</code>.</li>
+    <li><strong>Vercel / Netlify</strong> — connect the frontend GitHub repo, set the SQL env vars in the dashboard.</li>
+    <li><strong>Azure Static Web Apps</strong> — natural fit if everything else stays in Azure; their managed functions can do the SQL proxy.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>If the judges want to run it from scratch</h2>
+  <ol>
+    <li>Clone this repo</li>
+    <li>Read <a href="SETUP_AZURE.html">SETUP_AZURE.html</a> if they want to provision their own backend, OR connect to ours using credentials from <a href="HANDOFF_LOVABLE.md">HANDOFF_LOVABLE.md</a> (valid only during the event)</li>
+    <li><code>cd frontend &amp;&amp; bun install &amp;&amp; bun run dev</code></li>
+    <li>Open <code>http://localhost:5173</code></li>
+  </ol>
+  <div class="callout warn"><strong>Data retention.</strong> The Azure backend (and any data it returns) must be destroyed within 3 days after the event per the challenge brief.</div>
+</section>
+
+<footer>
+  Altis hackathon · frontend build notes · pairs with <a href="WORKFLOW_EXPLAINED.html">WORKFLOW_EXPLAINED.html</a> and <a href="SETUP_AZURE.html">SETUP_AZURE.html</a>
+</footer>
+
+</div>
+</body>
+</html>

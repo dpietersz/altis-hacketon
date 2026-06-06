@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Altis — Azure setup &amp; dependencies</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --card: #ffffff; --ink: #1c1c1c; --muted: #5e6470;
+    --line: #e4e4df; --accent: #2e5d4f; --accent-soft: #e9efea;
+    --warn: #b85c00; --warn-soft: #fff2e3;
+    --info: #1f5b8b; --info-soft: #e8f1f8;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); }
+  body { font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 56px 24px 96px; }
+  header.hero { margin-bottom: 40px; }
+  header.hero .tag { color: var(--accent); font-weight: 600; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
+  header.hero h1 { font-size: 32px; line-height: 1.2; margin: 0 0 12px; letter-spacing: -0.01em; }
+  header.hero p.sub { font-size: 18px; color: var(--muted); margin: 0; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 28px 30px 22px; margin: 0 0 22px; }
+  section h2 { font-size: 22px; margin: 0 0 6px; letter-spacing: -0.01em; }
+  section h2 .step { display: block; color: var(--accent); font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 4px; }
+  section h3 { font-size: 16px; margin: 22px 0 6px; }
+  section p { margin: 10px 0; }
+  ul, ol { padding-left: 22px; }
+  ul li, ol li { margin: 4px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 15px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-weight: 600; background: #fafaf7; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; }
+  code { background: #f1f1ec; padding: 1px 6px; border-radius: 4px; }
+  pre { background: #fafaf7; border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; overflow-x: auto; line-height: 1.45; }
+  .callout { border-left: 3px solid var(--info); background: var(--info-soft); padding: 12px 16px; border-radius: 8px; margin: 14px 0; font-size: 15px; }
+  .callout.warn { border-left-color: var(--warn); background: var(--warn-soft); }
+  footer { text-align: center; color: var(--muted); font-size: 13px; margin-top: 40px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="tag">Altis hackathon — infrastructure</div>
+  <h1>Azure setup &amp; dependencies</h1>
+  <p class="sub">Everything we provisioned to get the data pipeline running. Use this to rebuild the backend in a clean subscription.</p>
+</header>
+
+<section>
+  <h2>The Azure resources we use</h2>
+  <p>Everything lives in one resource group <code>rg-altis-hackathon</code> in <strong>West Europe</strong>.</p>
+  <table>
+    <thead><tr><th>Resource</th><th>Name</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>Storage account</td><td><code>atlishackethon</code> (StorageV2, LRS, public access enabled)</td><td>Holds the raw Excel files and the parquet outputs</td></tr>
+      <tr><td>Containers</td><td><code>raw</code>, <code>silver</code>, <code>gold</code></td><td>One per data-quality layer</td></tr>
+      <tr><td>Databricks workspace</td><td>Serverless Azure Databricks (already provisioned)</td><td>Runs the notebooks</td></tr>
+      <tr><td>SQL Server</td><td><code>atlis</code> (Gen5 serverless, 1 vCore)</td><td>Hosts the gold tables for the dashboard</td></tr>
+      <tr><td>SQL Database</td><td><code>altis</code></td><td>The single database all gold tables land in</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2><span class="step">Step 1</span>Create the storage account &amp; containers</h2>
+  <p>Azure Portal &rarr; <em>Create resource</em> &rarr; <strong>Storage account</strong>.</p>
+  <ul>
+    <li>Performance: <strong>Standard</strong></li>
+    <li>Redundancy: <strong>LRS</strong> (cheapest, fine for a hackathon)</li>
+    <li>Account kind: <strong>StorageV2</strong></li>
+    <li>Hierarchical namespace: <strong>disabled</strong> (we use plain blob)</li>
+    <li>Networking: <strong>Allow access from all networks</strong></li>
+  </ul>
+  <p>Once created, open <em>Data storage &rarr; Containers</em> and create three containers: <code>raw</code>, <code>silver</code>, <code>gold</code>.</p>
+
+  <h3>Grab the access key</h3>
+  <p>Storage account &rarr; <em>Security + networking &rarr; Access keys</em> &rarr; <strong>Show</strong> next to key1, then copy. You'll paste it into a Databricks secret a few steps below.</p>
+
+  <h3>Upload the source data</h3>
+  <p>In <code>raw/</code> create a folder called <code>received_original_data/</code> and upload the Excel exports from the four portcos. For Tier 2 also create <code>weather_data/</code> and upload the three KNMI <code>.txt</code> files.</p>
+
+  <div class="callout warn"><strong>Data retention.</strong> Per the challenge brief, all Altis-provided data must be deleted within 3 days after the event from every storage location (including this account).</div>
+</section>
+
+<section>
+  <h2><span class="step">Step 2</span>Configure Databricks (CLI + auth)</h2>
+  <p>On your laptop:</p>
+  <pre>curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh \
+    | sh -s -- -b ~/.local/bin
+databricks --version</pre>
+  <p>Then in the workspace UI: top-right avatar &rarr; <em>Settings &rarr; Developer &rarr; Access tokens &rarr; Generate new token</em> (no expiry is fine for a hackathon). Copy the PAT.</p>
+  <p>Write <code>~/.databrickscfg</code> with mode 0600:</p>
+  <pre>[DEFAULT]
+host  = https://adb-&lt;workspace-id&gt;.&lt;region&gt;.azuredatabricks.net
+token = dapi&lt;your-token&gt;</pre>
+  <p>Verify:</p>
+  <pre>databricks current-user me</pre>
+</section>
+
+<section>
+  <h2><span class="step">Step 3</span>Create the Databricks secret scope</h2>
+  <p>Storage and SQL credentials live in a server-side secret scope called <code>altis</code>. The notebooks read them via <code>dbutils.secrets.get()</code>. Two secrets:</p>
+  <pre>databricks secrets create-scope altis
+databricks secrets put-secret altis storage_key  --string-value '&lt;key1 from storage account&gt;'
+databricks secrets put-secret altis sql_password --string-value '&lt;SQL admin password&gt;'
+databricks secrets list-secrets altis</pre>
+  <div class="callout"><strong>Why a secret scope?</strong> GitHub's push protection blocks raw storage keys committed to source. Keeping them in Databricks means the notebooks stay safe to commit.</div>
+</section>
+
+<section>
+  <h2><span class="step">Step 4</span>Create the SQL Server and database</h2>
+  <p>Azure Portal &rarr; <em>Create resource</em> &rarr; <strong>SQL Database</strong>.</p>
+  <ul>
+    <li>Server: create new &rarr; name <code>atlis</code></li>
+    <li>Server admin login: <code>sasqladmin</code>; remember the password</li>
+    <li>Compute: <strong>Serverless</strong>, General Purpose, 1 vCore</li>
+    <li>Database name: <code>altis</code></li>
+    <li>Backup redundancy: LRS</li>
+  </ul>
+  <h3>Open the firewall for Databricks</h3>
+  <p>SQL Server <code>atlis</code> &rarr; <em>Security &rarr; Networking &rarr; Public access</em>:</p>
+  <ul>
+    <li>Public network access: <strong>Selected networks</strong> (or <em>All networks</em> for the hackathon)</li>
+    <li><strong>Exceptions:</strong> &check; <em>Allow Azure services and resources to access this server</em></li>
+    <li>If the Lovable host calls from outside Azure and gets a login error, switch to <em>All networks</em></li>
+  </ul>
+</section>
+
+<section>
+  <h2><span class="step">Step 5</span>Run the pipeline</h2>
+  <p>Import each notebook into the workspace then submit a serverless run. The notebooks live in <code>backend/databricks/notebooks/</code>.</p>
+  <pre>databricks workspace mkdirs /Users/&lt;your-email&gt;/altis
+for nb in 03_silver_cleanse 05_gold_classify 06_gold_forecast \
+          07_gold_covenant 11_silver_gold_weather 08_export_to_azure_sql; do
+  databricks workspace import /Users/&lt;your-email&gt;/altis/$nb \
+    --file backend/databricks/notebooks/${nb}.py \
+    --language PYTHON --format SOURCE --overwrite
+done</pre>
+  <p>Then submit each run via the workspace UI or via <code>databricks jobs submit --json @&lt;runspec&gt;.json</code>. Sample run specs are in <code>backend/databricks/notebooks/</code>.</p>
+  <p>Order of execution for a clean rebuild:</p>
+  <ol>
+    <li><strong>02 / 04</strong> — discovery (no writes; optional once you trust the data)</li>
+    <li><strong>03</strong> — silver cleanse (writes <code>silver/bookings.parquet</code>)</li>
+    <li><strong>05</strong> — gold classify (writes <code>gold/bookings_classified.parquet</code> + portfolio KPI)</li>
+    <li><strong>06</strong> — 13-week forecast (writes the forecast + assumptions)</li>
+    <li><strong>07</strong> — covenant headroom + consolidated</li>
+    <li><strong>10 + 11</strong> — Tier 2 weather (workable days, climate normals, weather-adjusted forecast)</li>
+    <li><strong>08</strong> — push every gold table to Azure SQL</li>
+    <li><strong>09 / 12</strong> — chart notebooks (Tier 1 and Tier 2; for reviewing only)</li>
+  </ol>
+</section>
+
+<section>
+  <h2>Cost &amp; cleanup</h2>
+  <p>Everything is serverless or pay-as-you-go:</p>
+  <ul>
+    <li>Storage account: ~€0.02 / GB / month (a few cents for our data)</li>
+    <li>SQL serverless: pauses after 12 hours idle (set during DB creation); ~€0.50 per active hour</li>
+    <li>Databricks serverless: charged per DBU; one full pipeline run &lt;€2</li>
+  </ul>
+  <h3>Tear it all down after the event</h3>
+  <p>Delete the resource group:</p>
+  <pre>az group delete --name rg-altis-hackathon --yes --no-wait</pre>
+  <p>Then rotate any keys/PATs you exposed and run <code>git filter-repo</code> against this repo to remove any committed data.</p>
+</section>
+
+<section>
+  <h2>What's in the secret scope (do not commit)</h2>
+  <table>
+    <thead><tr><th>Key</th><th>Value</th></tr></thead>
+    <tbody>
+      <tr><td><code>altis/storage_key</code></td><td>Key1 from the <code>atlishackethon</code> storage account</td></tr>
+      <tr><td><code>altis/sql_password</code></td><td>Password for SQL user <code>sasqladmin</code></td></tr>
+    </tbody>
+  </table>
+  <p>The notebooks reference these via:</p>
+  <pre>ACCOUNT_KEY  = dbutils.secrets.get("altis", "storage_key")
+SQL_PASSWORD = dbutils.secrets.get("altis", "sql_password")</pre>
+</section>
+
+<footer>
+  Altis hackathon · Azure provisioning notes · pairs with <a href="WORKFLOW_EXPLAINED.html">WORKFLOW_EXPLAINED.html</a> and <a href="BUILD_LOVABLE.html">BUILD_LOVABLE.html</a>
+</footer>
+
+</div>
+</body>
+</html>

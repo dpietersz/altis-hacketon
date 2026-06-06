@@ -65,6 +65,7 @@ gold_c = svc.get_container_client(GOLD)
 # COMMAND ----------
 
 TABLES = [
+    # Tier 1
     ("bookings_classified.parquet",          "gold_bookings_classified"),
     ("portfolio_kpi_monthly.parquet",        "gold_portfolio_kpi_monthly"),
     ("cashflow_history_weekly.parquet",      "gold_cashflow_history_weekly"),
@@ -73,6 +74,11 @@ TABLES = [
     ("covenant_headroom.parquet",            "gold_covenant_headroom"),
     ("cashflow_consolidated_13w.parquet",    "gold_cashflow_consolidated_13w"),
     ("cashflow_consolidated_net_13w.parquet", "gold_cashflow_consolidated_net_13w"),
+    # Tier 2 — weather
+    ("weather_daily.parquet",                "gold_weather_daily"),
+    ("weather_weekly.parquet",               "gold_weather_weekly"),
+    ("weather_climate_normals.parquet",      "gold_weather_climate_normals"),
+    ("cashflow_forecast_13w_weather.parquet", "gold_cashflow_forecast_13w_weather"),
 ]
 
 display(pd.DataFrame(TABLES, columns=["blob", "sql_table"]))

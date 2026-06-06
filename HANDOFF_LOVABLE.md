@@ -62,6 +62,11 @@ All eight tables live in the `dbo` schema. None of them have a primary key — t
 | `gold_covenant_headroom` | 156 | Cumulative cash, floor, headroom and traffic-light status per (portco × scenario × week). Use for the safety gauges. |
 | `gold_cashflow_consolidated_13w` | 156 | Forecast summed across all four portcos per (scenario × week × driver). PE board lens. |
 | `gold_cashflow_consolidated_net_13w` | 39 | Same but already netted: one row per (scenario × week) with cumulative. The PE board's "one line" chart. |
+| **Tier 2 — weather** | | |
+| `gold_weather_daily` | ~7,000 | Per-portco × day: rainfall mm, temps, wind, sunshine, `work_day_score` (0/0.5/1). |
+| `gold_weather_weekly` | ~1,000 | Per-portco × Monday-week: `work_day_ratio`, total rainfall, wet days, lost days. Use for the weather overlay charts. |
+| `gold_weather_climate_normals` | 36 | Per-portco × month: median/wet/dry `work_day_ratio` from 2022-2024. Drives the weather-scenario lookup. |
+| `gold_cashflow_forecast_13w_weather` | 624 | The Tier 1 forecast adjusted by the weather model. Has the same shape as `gold_cashflow_forecast_13w` plus a `weather_ratio` column. |
 
 ---
 
@@ -124,6 +129,44 @@ SELECT portco, scenario, dso_days, gross_margin,
 FROM gold_assumptions;
 ```
 
+### Tier 2 — weather overlay (quarterly rainfall + revenue per portco)
+For the "is the weather model actually meaningful?" panel.
+```sql
+SELECT portco,
+       DATEPART(year,  CAST(week_start AS date)) AS yr,
+       DATEPART(quarter, CAST(week_start AS date)) AS q,
+       SUM(total_rain_mm) AS rain_mm,
+       AVG(work_day_ratio) AS work_day_ratio
+FROM gold_weather_weekly
+GROUP BY portco, DATEPART(year, CAST(week_start AS date)), DATEPART(quarter, CAST(week_start AS date))
+ORDER BY portco, yr, q;
+```
+
+### Tier 2 — weather-adjusted 13-week forecast (the headline Tier 2 chart)
+Same shape as the Tier 1 forecast query, but from the weather-adjusted table.
+```sql
+SELECT portco, scenario, week_idx, week_start,
+       SUM(amount_eur) AS net_cash_eur
+FROM gold_cashflow_forecast_13w_weather
+GROUP BY portco, scenario, week_idx, week_start
+ORDER BY portco, scenario, week_idx;
+```
+
+### Tier 2 — Tier 1 vs Tier 2 comparison (per portco × scenario)
+For the "what does weather cost us?" headline.
+```sql
+SELECT t1.portco, t1.scenario,
+       SUM(t1.amount_eur) AS tier1_net,
+       SUM(t2.amount_eur) AS tier2_net,
+       SUM(t2.amount_eur) - SUM(t1.amount_eur) AS delta
+FROM gold_cashflow_forecast_13w t1
+JOIN gold_cashflow_forecast_13w_weather t2
+  ON t1.portco = t2.portco AND t1.scenario = t2.scenario
+ AND t1.week_idx = t2.week_idx AND t1.driver = t2.driver
+GROUP BY t1.portco, t1.scenario
+ORDER BY t1.portco, t1.scenario;
+```
+
 ### Drill-down — bookings behind a forecast cell
 For the traceability panel on the CFO view. Example: bookings that feed week 0 of the base forecast for peter_ummels.
 
@@ -149,6 +192,8 @@ ORDER BY booking_date DESC;
 - **Andijk** has no booking-level data — show its revenue history from `gold_portfolio_kpi_monthly` but no forecast / no drill-down. Label "aggregate only".
 - **Covenant floor** is a PLACEHOLDER until the real covenant document arrives. Show a "placeholder" tooltip on the gauge.
 - **DSO is 30 days** (CFO-confirmed). Also surface the **7-day acceptance→invoice lag** as a non-toggleable fact in the UI.
+- **Tier 2 weather model** uses HISTORICAL KNMI data + climate normals (no live forecast yet). Label as "based on 2022-2024 weather normals". When we wire a live forecast API later, the model doesn't change — just the source of the lookup.
+- The Tier 2 `weather_ratio` column is a fraction 0..1: 1.0 = perfect work week, 0.5 = half the working days lost. Useful for the tooltip.
 
 ---
 

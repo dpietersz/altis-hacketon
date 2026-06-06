@@ -37,16 +37,17 @@ SQL_DB = "altis"
 SQL_USER = "sasqladmin"
 SQL_PASSWORD = dbutils.secrets.get("altis", "sql_password")
 
-JDBC_URL = (
-    f"jdbc:sqlserver://{SQL_SERVER}:1433;"
-    f"database={SQL_DB};"
-    "encrypt=true;trustServerCertificate=false;"
-    "hostNameInCertificate=*.database.windows.net;loginTimeout=30"
-)
-JDBC_PROPS = {
+# Serverless Databricks doesn't allow the generic `jdbc` writer; use the
+# native `sqlserver` connector which IS on the allowlist (see UNSUPPORTED_DATA_SOURCE_WRITE).
+SQLSERVER_OPTS = {
+    "host": SQL_SERVER,
+    "port": "1433",
+    "database": SQL_DB,
     "user": SQL_USER,
     "password": SQL_PASSWORD,
-    "driver": "com.microsoft.sqlserver.jdbc.SQLServerDriver",
+    "encrypt": "true",
+    "trustServerCertificate": "false",
+    "hostNameInCertificate": "*.database.windows.net",
 }
 
 svc = BlobServiceClient(
@@ -105,10 +106,9 @@ for blob_name, table_name in TABLES:
         sdf = spark.createDataFrame(pdf)
         (
             sdf.write
-            .format("jdbc")
-            .option("url", JDBC_URL)
+            .format("sqlserver")
             .option("dbtable", table_name)
-            .options(**JDBC_PROPS)
+            .options(**SQLSERVER_OPTS)
             .mode("overwrite")
             .save()
         )
@@ -133,10 +133,9 @@ verify_rows = []
 for _, table_name in TABLES:
     try:
         sdf = (
-            spark.read.format("jdbc")
-            .option("url", JDBC_URL)
+            spark.read.format("sqlserver")
             .option("dbtable", table_name)
-            .options(**JDBC_PROPS)
+            .options(**SQLSERVER_OPTS)
             .load()
         )
         cnt = sdf.count()

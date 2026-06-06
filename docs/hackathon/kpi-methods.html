@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Altis KPI and Methods Reference</title>
+  <meta name="doc-template" content="reference"><meta name="diataxis" content="reference, explanation"><meta name="doc-status" content="draft"><meta name="audience" content="Altis CFO, controller, judges, dashboard builders"><meta name="generated-by" content="pi html-docs skill">
+  <script type="application/json" id="html-docs-metadata">{"template":"reference","diataxis":["reference","explanation"],"status":"draft","visuals":["../assets/altis-hackathon-docs/kpi-methods.png"]}</script>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="min-h-screen bg-[#0a0e1a] text-slate-100">
+<main class="mx-auto max-w-7xl px-6 py-10 lg:px-8 lg:py-14">
+  <nav class="mb-6 flex flex-wrap gap-3 text-sm"><a class="text-cyan-300 underline" href="index.html">Hub</a><a class="text-cyan-300 underline" href="data-processing.html">Data processing</a><a class="text-slate-400 underline" href="../../WORKFLOW_EXPLAINED.html">Original workflow doc</a></nav>
+  <header class="rounded-3xl border border-slate-700 bg-gradient-to-br from-slate-900 via-slate-900 to-blue-950/60 p-8 lg:p-12">
+    <p class="text-sm font-bold uppercase tracking-[0.22em] text-amber-300">KPI Methods · Controller Reference</p>
+    <h1 class="mt-3 text-4xl font-black tracking-tight md:text-6xl">What each KPI means and how it is calculated</h1>
+    <p class="mt-5 max-w-4xl text-lg leading-8 text-slate-200">The KPI model is deliberately explainable. It combines observed invoice bookings, CFO-stated payment policy, seasonality, margin assumptions, and weather work-day ratios. No black-box ML is used.</p>
+    <figure class="mt-8 rounded-2xl border border-slate-700 bg-black/20 p-3"><img class="w-full rounded-xl" src="../assets/altis-hackathon-docs/kpi-methods.png" alt="KPI method map: observed invoices flow through DSO, seasonality and weather ratio into receipts, while gross margin and driver split create outflows, then net cash feeds headroom."><figcaption class="mt-3 text-sm text-slate-400"><strong>Reader question:</strong> which knobs create KPI numbers? Green is observed invoice data, amber is assumptions, cyan is calculated cash KPI, and red is covenant risk.</figcaption></figure>
+  </header>
+
+  <section class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <article class="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-5"><p class="text-xs uppercase tracking-widest text-emerald-300">Observed</p><h2 class="mt-2 text-xl font-bold">Milestone inflow</h2><p class="mt-2 text-sm text-slate-300">Booking-level revenue rows from sales ledgers, classified as <code>milestone_in</code>.</p></article>
+    <article class="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-5"><p class="text-xs uppercase tracking-widest text-amber-300">Assumption</p><h2 class="mt-2 text-xl font-bold">DSO = 30 days</h2><p class="mt-2 text-sm text-slate-300">CFO-stated invoice-to-payment lag. Acceptance-to-invoice lag is 7 days and baked into baseline.</p></article>
+    <article class="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-5"><p class="text-xs uppercase tracking-widest text-amber-300">Derived</p><h2 class="mt-2 text-xl font-bold">Outflows</h2><p class="mt-2 text-sm text-slate-300">78% of receipts become costs, split 45% materials, 35% subcontractors, 20% labour.</p></article>
+    <article class="rounded-2xl border border-red-500/40 bg-red-500/10 p-5"><p class="text-xs uppercase tracking-widest text-red-300">Placeholder</p><h2 class="mt-2 text-xl font-bold">Headroom</h2><p class="mt-2 text-sm text-slate-300">Starting cash €1M minus a floor equal to 6× recent weekly revenue until covenant docs arrive.</p></article>
+  </section>
+
+  <section class="mt-6 rounded-2xl border border-slate-700 bg-slate-900/90 p-6 lg:p-8">
+    <h2 class="text-2xl font-bold text-cyan-300">Core KPI formulas</h2>
+    <div class="mt-4 grid gap-4 lg:grid-cols-2">
+      <div class="rounded-xl border border-slate-700 bg-slate-950 p-5"><h3 class="font-bold text-cyan-200">Receipts from invoices</h3><pre class="mt-3 overflow-auto text-sm text-slate-200"><code>cash_in[p,w] = sum(bookings where
+  booking_date + DSO lands in week w)
+
+DSO base = 30 days
+wet = +7 days
+dry = -3 days</code></pre></div>
+      <div class="rounded-xl border border-slate-700 bg-slate-950 p-5"><h3 class="font-bold text-cyan-200">Projected future invoices</h3><pre class="mt-3 overflow-auto text-sm text-slate-200"><code>future_in[p,w] = recent_weekly_avg[p]
+  × monthly_seasonality[p, month(w)]
+  × scenario_revenue_multiplier
+  × (1 + growth_yoy)</code></pre></div>
+      <div class="rounded-xl border border-slate-700 bg-slate-950 p-5"><h3 class="font-bold text-cyan-200">Derived outflows</h3><pre class="mt-3 overflow-auto text-sm text-slate-200"><code>out_total = cash_in × (1 - gross_margin)
+materials_out = -out_total × 0.45
+subcon_out    = -out_total × 0.35
+labour_out    = -out_total × 0.20</code></pre></div>
+      <div class="rounded-xl border border-slate-700 bg-slate-950 p-5"><h3 class="font-bold text-cyan-200">Covenant headroom</h3><pre class="mt-3 overflow-auto text-sm text-slate-200"><code>net_cash[w] = cash_in[w] - outflows[w]
+cum_cash[w] = starting_cash + cumsum(net_cash)
+floor = 6 × recent_weekly_revenue
+headroom = cum_cash - floor</code></pre></div>
+    </div>
+  </section>
+
+  <section class="mt-6 rounded-2xl border border-slate-700 bg-slate-900/90 p-6 lg:p-8">
+    <h2 class="text-2xl font-bold text-cyan-300">KPI reference table</h2>
+    <div class="mt-4 overflow-x-auto"><table class="w-full border-collapse text-left text-sm"><thead class="bg-white/5 text-cyan-300"><tr><th class="p-3">KPI / field</th><th class="p-3">Meaning</th><th class="p-3">Source</th><th class="p-3">Dashboard label</th></tr></thead><tbody class="divide-y divide-slate-700 text-slate-200">
+      <tr><td class="p-3"><code>amount_net</code></td><td class="p-3">Credit minus debit; positive revenue booking</td><td class="p-3">Raw ledger exports</td><td class="p-3">Observed booking</td></tr>
+      <tr><td class="p-3"><code>milestone_in</code></td><td class="p-3">Customer receipts driver from invoiced milestones</td><td class="p-3">GL 8000–8005 or sales journal fallback</td><td class="p-3">Observed / projected inflow</td></tr>
+      <tr><td class="p-3"><code>materials_out</code></td><td class="p-3">Estimated roofing material cash cost</td><td class="p-3">Derived from margin and 45% split</td><td class="p-3">Derived from gross-margin assumption</td></tr>
+      <tr><td class="p-3"><code>subcon_out</code></td><td class="p-3">Estimated subcontractor cash cost</td><td class="p-3">Derived from margin and 35% split</td><td class="p-3">Derived from gross-margin assumption</td></tr>
+      <tr><td class="p-3"><code>labour_out</code></td><td class="p-3">Estimated labour cash cost</td><td class="p-3">Derived from margin and 20% split</td><td class="p-3">Derived from gross-margin assumption</td></tr>
+      <tr><td class="p-3"><code>confidence</code></td><td class="p-3">Observed, mixed, projected, kpi_projected, derived, or weather-derived</td><td class="p-3">Forecast notebook</td><td class="p-3">Solid/dashed line or badge</td></tr>
+      <tr><td class="p-3"><code>work_day_ratio</code></td><td class="p-3">Mon–Fri work-day score sum divided by 5</td><td class="p-3">KNMI weather model</td><td class="p-3">Weather productivity ratio</td></tr>
+      <tr><td class="p-3"><code>headroom_eur</code></td><td class="p-3">Cash above placeholder covenant floor</td><td class="p-3">Covenant notebook</td><td class="p-3">Placeholder covenant headroom</td></tr>
+    </tbody></table></div>
+  </section>
+
+  <section class="mt-6 rounded-2xl border border-slate-700 bg-slate-900/90 p-6 lg:p-8">
+    <h2 class="text-2xl font-bold text-cyan-300">Weather method</h2>
+    <div class="mt-4 grid gap-4 md:grid-cols-3"><div class="rounded-xl bg-slate-800 p-5"><h3 class="font-bold text-emerald-300">1.0 full day</h3><p class="mt-2 text-sm text-slate-300">Dry, mild, no strong wind.</p></div><div class="rounded-xl bg-slate-800 p-5"><h3 class="font-bold text-amber-300">0.5 partial day</h3><p class="mt-2 text-sm text-slate-300">Light rain: 1–10 mm/day.</p></div><div class="rounded-xl bg-slate-800 p-5"><h3 class="font-bold text-red-300">0.0 lost day</h3><p class="mt-2 text-sm text-slate-300">Heavy rain &gt;10 mm/day, mean temp &lt;0 °C, or wind &gt;10 m/s.</p></div></div>
+    <p class="mt-4 text-slate-300">Future weather scenarios use 2022–2024 climate normals: base = median, wet = 10th percentile work-day ratio, dry = 90th percentile. Weather-adjusted forecast scales inflow by <code>weather_ratio</code> and records implied delay as <code>(1 - ratio) × 14 days</code>.</p>
+  </section>
+
+  <section class="mt-6 rounded-2xl border border-slate-700 bg-slate-900/90 p-6 lg:p-8">
+    <h2 class="text-2xl font-bold text-cyan-300">Traceability path</h2>
+    <ol class="mt-4 list-decimal space-y-3 pl-6 text-slate-200"><li>User clicks dashboard forecast cell.</li><li>Side panel shows driver, scenario, portco, week, confidence, DSO, margin, and weather ratio.</li><li>Observed or mixed inflow shows booking rows: <code>booking_number</code>, <code>source_file</code>, <code>booking_date</code>, <code>amount_net</code>.</li><li>Projected inflow states it is projected from recent weekly average × seasonality × scenario multiplier.</li><li>Derived outflows show exact margin and driver-share assumptions.</li></ol>
+  </section>
+
+  <section class="mt-6 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-6 lg:p-8">
+    <h2 class="text-2xl font-bold text-amber-300">Required honest labels</h2>
+    <ul class="mt-4 list-disc space-y-2 pl-6 text-slate-200"><li>Use <strong>Forecast (driver-decomposed)</strong>, never “AI forecast”.</li><li>Mark outflows as <strong>derived from gross-margin assumption</strong>.</li><li>Mark Andijk as <strong>aggregate only — no transactional drill-down</strong>.</li><li>Mark covenant floor as <strong>placeholder — awaiting covenant terms doc</strong>.</li><li>Mark Project Lead views as <strong>illustrative</strong> unless project/WIP files arrive.</li><li>Mark weather scenario as <strong>based on 2022–2024 weather normals</strong>, not live forecast.</li></ul>
+  </section>
+</main>
+</body>
+</html>

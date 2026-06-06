@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Altis Data Processing and Architecture</title>
+  <meta name="doc-template" content="architecture"><meta name="diataxis" content="explanation, reference"><meta name="doc-status" content="draft"><meta name="audience" content="hackathon judges, Altis finance team, data engineers"><meta name="generated-by" content="pi html-docs skill">
+  <script type="application/json" id="html-docs-metadata">{"template":"architecture","diataxis":["explanation","reference"],"status":"draft","visuals":["../assets/altis-hackathon-docs/data-pipeline.png"]}</script>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="min-h-screen bg-[#0a0e1a] text-slate-100">
+<main class="mx-auto max-w-7xl px-6 py-10 lg:px-8 lg:py-14">
+  <nav class="mb-6 flex flex-wrap gap-3 text-sm"><a class="text-cyan-300 underline" href="index.html">Hub</a><a class="text-cyan-300 underline" href="kpi-methods.html">KPI methods</a><a class="text-slate-400 underline" href="../../WORKFLOW_EXPLAINED.html">Original workflow doc</a></nav>
+  <header class="rounded-3xl border border-slate-700 bg-gradient-to-br from-slate-900 via-slate-900 to-blue-950/60 p-8 lg:p-12">
+    <p class="text-sm font-bold uppercase tracking-[0.22em] text-cyan-300">Architecture · Data processing</p>
+    <h1 class="mt-3 text-4xl font-black tracking-tight md:text-6xl">How the Altis data became dashboard-ready</h1>
+    <p class="mt-5 max-w-4xl text-lg leading-8 text-slate-200">The build uses a layered Databricks pipeline: raw accounting and weather files are parsed into canonical Silver datasets, enriched into Gold business tables, exported to Azure SQL, then consumed by the Lovable dashboard.</p>
+    <figure class="mt-8 rounded-2xl border border-slate-700 bg-black/20 p-3"><img class="w-full rounded-xl" src="../assets/altis-hackathon-docs/data-pipeline.png" alt="Pipeline from Bronze Raw through Parse and Dedup, Identify Portcos, Classify Drivers, Forecast 13w, Covenant Headroom, Weather Adjustment, and SQL Export."><figcaption class="mt-3 text-sm text-slate-400"><strong>Reader question:</strong> how does data move? Each notebook narrows uncertainty: first file shape, then clean ledger, then company identity, then business driver labels, then forecast tables.</figcaption></figure>
+  </header>
+
+  <section class="mt-6 rounded-2xl border border-slate-700 bg-slate-900/90 p-6 lg:p-8">
+    <h2 class="text-2xl font-bold text-cyan-300">Source data inventory</h2>
+    <div class="mt-4 overflow-x-auto"><table class="w-full border-collapse text-left text-sm"><thead class="bg-white/5 text-cyan-300"><tr><th class="p-3">Source</th><th class="p-3">System / shape</th><th class="p-3">Use</th><th class="p-3">Important caveat</th></tr></thead><tbody class="divide-y divide-slate-700 text-slate-200">
+      <tr><td class="p-3">Peter Ummels exports</td><td class="p-3">Yuki, admin 82604, header after 12 meta rows</td><td class="p-3">Booking-level revenue ledger</td><td class="p-3">Overlapping exports; dedup needed</td></tr>
+      <tr><td class="p-3">Heeze exports</td><td class="p-3">Exact GB 8000/8001/8002</td><td class="p-3">Booking-level revenue ledger with VAT and free text</td><td class="p-3">No AP-side costs</td></tr>
+      <tr><td class="p-3">Dataset 2</td><td class="p-3">Yearly sheets, sales journal 006</td><td class="p-3">Winschoten booking-level revenue</td><td class="p-3">Missing GL account detail</td></tr>
+      <tr><td class="p-3">Dataset 1 + JSON aggregate</td><td class="p-3">Monthly KPI roll-up</td><td class="p-3">Revenue matching and Andijk history</td><td class="p-3">Andijk aggregate-only, no drill-down</td></tr>
+      <tr><td class="p-3">KNMI weather files</td><td class="p-3">Daily observations for Brunssum, Eindhoven, Winschoten</td><td class="p-3">Weather-to-work-day scoring</td><td class="p-3">Historical normals, not live 13-week forecast</td></tr>
+    </tbody></table></div>
+  </section>
+
+  <section class="mt-6 rounded-2xl border border-slate-700 bg-slate-900/90 p-6 lg:p-8">
+    <h2 class="text-2xl font-bold text-cyan-300">Notebook pipeline</h2>
+    <div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div class="rounded-xl border border-slate-700 bg-slate-800/70 p-5"><h3 class="font-bold text-cyan-200">01 · Connect storage</h3><p class="mt-2 text-sm text-slate-300">Lists raw/gold containers, loads a legacy database workbook, snapshots schema metadata.</p></div>
+      <div class="rounded-xl border border-slate-700 bg-slate-800/70 p-5"><h3 class="font-bold text-cyan-200">02 · Explore received data</h3><p class="mt-2 text-sm text-slate-300">Inventories every blob, captures sheet shapes and first rows, guesses header rows.</p></div>
+      <div class="rounded-xl border border-slate-700 bg-slate-800/70 p-5"><h3 class="font-bold text-cyan-200">03 · Silver cleanse</h3><p class="mt-2 text-sm text-slate-300">Parses Yuki, Exact, and Dataset 2; writes per-source Parquet and unified <code>silver/bookings.parquet</code>.</p></div>
+      <div class="rounded-xl border border-slate-700 bg-slate-800/70 p-5"><h3 class="font-bold text-cyan-200">04 · Validate + identify</h3><p class="mt-2 text-sm text-slate-300">Matches yearly/monthly totals to JSON P&amp;L to resolve portcos: Peter Ummels, Heeze, Winschoten, Andijk.</p></div>
+      <div class="rounded-xl border border-slate-700 bg-slate-800/70 p-5"><h3 class="font-bold text-cyan-200">05 · Gold classify</h3><p class="mt-2 text-sm text-slate-300">Adds real portco names and driver labels; all observed rows map to <code>milestone_in</code>.</p></div>
+      <div class="rounded-xl border border-slate-700 bg-slate-800/70 p-5"><h3 class="font-bold text-cyan-200">06 · Forecast 13 weeks</h3><p class="mt-2 text-sm text-slate-300">Builds history, seasonality, assumptions, scenario forecasts, confidence labels, and outflows.</p></div>
+      <div class="rounded-xl border border-slate-700 bg-slate-800/70 p-5"><h3 class="font-bold text-cyan-200">07 · Covenant</h3><p class="mt-2 text-sm text-slate-300">Adds placeholder cash floor, cumulative cash, headroom, and ok/watch/breach statuses.</p></div>
+      <div class="rounded-xl border border-slate-700 bg-slate-800/70 p-5"><h3 class="font-bold text-cyan-200">08 · SQL export</h3><p class="mt-2 text-sm text-slate-300">Pushes Gold Parquet tables into Azure SQL as flat dashboard tables.</p></div>
+      <div class="rounded-xl border border-slate-700 bg-slate-800/70 p-5"><h3 class="font-bold text-cyan-200">10–12 · Weather + charts</h3><p class="mt-2 text-sm text-slate-300">Normalizes KNMI files, creates work-day ratios, adjusts forecast, and sketches Tier 2 visualizations.</p></div>
+    </div>
+  </section>
+
+  <section class="mt-6 rounded-2xl border border-slate-700 bg-slate-900/90 p-6 lg:p-8">
+    <h2 class="text-2xl font-bold text-cyan-300">Canonical Silver schema</h2>
+    <p class="mt-3 text-slate-300">Silver keeps the audit trail. Every booking carries its <code>source_file</code>, <code>source_schema</code>, <code>booking_number</code>, dates, GL fields, amount, VAT, and raw text. This makes dashboard drill-down possible.</p>
+    <div class="mt-4 grid gap-3 md:grid-cols-4 text-sm">
+      <div class="rounded-xl bg-slate-800 p-4"><strong>Identity</strong><br><span class="text-slate-400">portco, administration, source_file</span></div>
+      <div class="rounded-xl bg-slate-800 p-4"><strong>Ledger</strong><br><span class="text-slate-400">gl_account, journal, period, booking_number</span></div>
+      <div class="rounded-xl bg-slate-800 p-4"><strong>Money</strong><br><span class="text-slate-400">debit, credit, amount_net, vat_amount</span></div>
+      <div class="rounded-xl bg-slate-800 p-4"><strong>Trace</strong><br><span class="text-slate-400">boekingstekst, ingested_at, source_schema</span></div>
+    </div>
+  </section>
+
+  <section class="mt-6 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-6 lg:p-8">
+    <h2 class="text-2xl font-bold text-amber-300">Honest boundaries</h2>
+    <ul class="mt-4 list-disc space-y-2 pl-6 text-slate-200"><li>Observed data is sales-side only: GL 8000–8005 revenue accounts.</li><li>No payment-date column: receipts use booking/invoice date + DSO.</li><li>No AP-side data: materials, subcontractor, and labour outflows are derived from margin assumptions.</li><li>No real covenant document yet: headroom floor is placeholder.</li><li>Weather model uses historical KNMI normals, not live weather forecast API.</li></ul>
+  </section>
+</main>
+</body>
+</html>

@@ -154,30 +154,38 @@ print("wrote silver/weather_daily.parquet")
 
 # COMMAND ----------
 
+# Roofing workable-day rules (binary). Refined with team input:
+#   - Above 28°C max temp → too hot for safe roofing
+#   - Below 5°C min temp → frozen / icy surfaces, dangerous
+#   - Wind above Beaufort 6 upper bound (~13.8 m/s) → can't work safely on a roof
+#   - Daily rainfall above 5 mm → industry rule of thumb for "stop outdoor work"
+#   - Weekend (Sat/Sun) → roofers don't work
 THRESHOLDS = {
-    "heavy_rain_mm":  10.0,   # >10 mm → no work
-    "light_rain_mm":  1.0,    # 1-10 mm → half day
-    "freeze_c":       0.0,    # mean temp < 0 → no work
-    "strong_wind_ms": 10.0,   # >10 m/s ≈ Bft 5 → no work
+    "max_temp_c":   28.0,   # daily MAX > 28 → too hot
+    "min_temp_c":   5.0,    # daily MIN < 5 → too cold
+    "max_wind_ms":  13.8,   # > Beaufort 6 upper bound
+    "max_rain_mm":  5.0,    # > 5 mm/day → too wet
 }
 display(pd.DataFrame([THRESHOLDS]))
 
-def score_row(rain, mean_t, wind):
-    if pd.isna(rain) or pd.isna(mean_t):
+def score_row(rain, max_t, min_t, wind):
+    """1.0 = workable day, 0.0 = lost day. NaN if data missing."""
+    if pd.isna(rain) or pd.isna(max_t):
         return np.nan
-    if rain > THRESHOLDS["heavy_rain_mm"]:
+    if max_t > THRESHOLDS["max_temp_c"]:
         return 0.0
-    if not pd.isna(mean_t) and mean_t < THRESHOLDS["freeze_c"]:
+    if not pd.isna(min_t) and min_t < THRESHOLDS["min_temp_c"]:
         return 0.0
-    if not pd.isna(wind) and wind > THRESHOLDS["strong_wind_ms"]:
+    if not pd.isna(wind) and wind > THRESHOLDS["max_wind_ms"]:
         return 0.0
-    if rain > THRESHOLDS["light_rain_mm"]:
-        return 0.5
+    if rain > THRESHOLDS["max_rain_mm"]:
+        return 0.0
     return 1.0
 
 silver_weather["work_day_score"] = [
-    score_row(r, t, w) for r, t, w in
-    zip(silver_weather["rainfall_mm"], silver_weather["mean_temp_c"], silver_weather["wind_ms"])
+    score_row(r, mx, mn, w) for r, mx, mn, w in
+    zip(silver_weather["rainfall_mm"], silver_weather["max_temp_c"],
+        silver_weather["min_temp_c"], silver_weather["wind_ms"])
 ]
 
 # Write gold/weather_daily.parquet (silver + score)
@@ -380,18 +388,118 @@ display(compare.sort_values(["portco", "scenario"]))
 
 # COMMAND ----------
 
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 8. Monthly workable-days KPI (the Tier 2 headline)
+# MAGIC
+# MAGIC One row per (portco, year, month) with:
+# MAGIC - `workable_days` — count of Mon-Fri days that passed all four weather thresholds
+# MAGIC - `total_weekdays` — total Mon-Fri days in that month (for the ratio)
+# MAGIC - `revenue_eur` — invoiced revenue from gold/bookings_classified
+# MAGIC
+# MAGIC Andijk has no KNMI file so its `workable_days` is the **average across the
+# MAGIC other three portcos** for the same month. Clearly tagged via the
+# MAGIC `weather_source` column.
+
+# COMMAND ----------
+
+# Workable days per (portco, year-month) from the daily gold table
+weekday_only = gold_daily[gold_daily["dow"] < 5].copy()
+weekday_only["year"] = weekday_only["dt"].dt.year
+weekday_only["month"] = weekday_only["dt"].dt.month
+
+monthly_wx = (
+    weekday_only.groupby(["portco", "year", "month"], as_index=False)
+    .agg(
+        workable_days=("work_day_score", lambda s: int(s.fillna(0).sum())),
+        total_weekdays=("work_day_score", "count"),
+    )
+)
+monthly_wx["workable_ratio"] = (monthly_wx["workable_days"] / monthly_wx["total_weekdays"]).round(3)
+monthly_wx["weather_source"] = "knmi"
+
+# Add andijk using the average of the other three
+other_avg = (
+    monthly_wx.groupby(["year", "month"], as_index=False)
+    .agg(
+        workable_days=("workable_days", lambda s: int(round(s.mean()))),
+        total_weekdays=("total_weekdays", "max"),
+    )
+)
+other_avg["workable_ratio"] = (other_avg["workable_days"] / other_avg["total_weekdays"]).round(3)
+other_avg["portco"] = "andijk"
+other_avg["weather_source"] = "portfolio_avg_fallback"
+monthly_wx = pd.concat([monthly_wx, other_avg[monthly_wx.columns]], ignore_index=True)
+
+# Monthly revenue from gold bookings + KPI for andijk
+bookings = pd.read_parquet(io.BytesIO(gold_c.get_blob_client("bookings_classified.parquet").download_blob().readall()))
+bookings["booking_date"] = pd.to_datetime(bookings["booking_date"])
+inflows_b = bookings[bookings["driver"] == "milestone_in"].copy()
+inflows_b["year"] = inflows_b["booking_date"].dt.year
+inflows_b["month"] = inflows_b["booking_date"].dt.month
+rev_tx = (
+    inflows_b.groupby(["portco", "year", "month"], as_index=False)["amount_net"].sum()
+    .rename(columns={"amount_net": "revenue_eur"})
+)
+
+# Andijk revenue from KPI table
+kpi = pd.read_parquet(io.BytesIO(gold_c.get_blob_client("portfolio_kpi_monthly.parquet").download_blob().readall()))
+rev_kpi_andijk = (
+    kpi[kpi["portco"] == "andijk"]
+    .groupby(["portco", "year", "month"], as_index=False)["revenue_eur"].sum()
+)
+revenue_monthly = pd.concat([rev_tx, rev_kpi_andijk], ignore_index=True)
+revenue_monthly["revenue_eur"] = revenue_monthly["revenue_eur"].round(2)
+
+# Join
+workable_monthly = monthly_wx.merge(revenue_monthly, on=["portco", "year", "month"], how="left")
+workable_monthly["period_start"] = pd.to_datetime(
+    workable_monthly["year"].astype(str) + "-" + workable_monthly["month"].astype(str) + "-01"
+).dt.date
+workable_monthly = workable_monthly[[
+    "portco", "year", "month", "period_start",
+    "workable_days", "total_weekdays", "workable_ratio",
+    "revenue_eur", "weather_source",
+]].sort_values(["portco", "year", "month"]).reset_index(drop=True)
+
+print(f"workable_days_monthly rows: {len(workable_monthly):,}")
+display(workable_monthly.head(15))
+
+buf = io.BytesIO()
+workable_monthly.to_parquet(buf, index=False)
+buf.seek(0)
+gold_c.upload_blob(name="workable_days_monthly.parquet", data=buf.getvalue(), overwrite=True)
+print("wrote gold/workable_days_monthly.parquet")
+
+# Quick portfolio-aggregate preview
+portfolio = (
+    workable_monthly.groupby(["year", "month", "period_start"], as_index=False)
+    .agg(
+        avg_workable_days=("workable_days", "mean"),
+        total_revenue_eur=("revenue_eur", "sum"),
+    )
+    .round({"avg_workable_days": 1, "total_revenue_eur": 2})
+)
+print("\nPortfolio (average workable days, summed revenue) — last 12 months:")
+display(portfolio.tail(12))
+
+# COMMAND ----------
+
 # Save snapshot
 now = datetime.now(timezone.utc)
 snap = {
     "captured_at": now.isoformat(timespec="seconds"),
     "thresholds": THRESHOLDS,
     "rows": {
-        "silver_weather_daily": int(len(silver_weather)),
-        "gold_weather_weekly":  int(len(weekly)),
-        "climate_normals":      int(len(climate)),
-        "forecast_t2":          int(len(forecast_t2)),
+        "silver_weather_daily":     int(len(silver_weather)),
+        "gold_weather_weekly":      int(len(weekly)),
+        "climate_normals":          int(len(climate)),
+        "forecast_t2":              int(len(forecast_t2)),
+        "workable_days_monthly":    int(len(workable_monthly)),
     },
     "compare": compare.to_dict(orient="records"),
+    "workable_sample": workable_monthly.tail(12).to_dict(orient="records"),
 }
 gold_c.upload_blob(name=f"_meta/weather-build-{now.strftime('%Y%m%dT%H%M%SZ')}.json",
                    data=json.dumps(snap, indent=2, default=str).encode(), overwrite=True)

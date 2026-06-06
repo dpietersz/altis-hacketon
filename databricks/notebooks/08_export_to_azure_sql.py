@@ -79,6 +79,7 @@ TABLES = [
     ("weather_weekly.parquet",               "gold_weather_weekly"),
     ("weather_climate_normals.parquet",      "gold_weather_climate_normals"),
     ("cashflow_forecast_13w_weather.parquet", "gold_cashflow_forecast_13w_weather"),
+    ("workable_days_monthly.parquet",         "gold_workable_days_monthly"),
 ]
 
 display(pd.DataFrame(TABLES, columns=["blob", "sql_table"]))

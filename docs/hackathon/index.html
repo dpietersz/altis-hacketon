@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Altis Hackathon Documentation Hub</title>
+  <meta name="doc-template" content="project-overview">
+  <meta name="diataxis" content="explanation, reference">
+  <meta name="doc-status" content="draft">
+  <meta name="audience" content="hackathon judges, Altis finance team, frontend builders">
+  <meta name="generated-by" content="pi html-docs skill">
+  <script type="application/json" id="html-docs-metadata">{"template":"project-overview","diataxis":["explanation","reference"],"status":"draft","visuals":["../assets/altis-hackathon-docs/system-context.png"]}</script>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="min-h-screen bg-[#0a0e1a] text-slate-100">
+  <main class="mx-auto max-w-7xl px-6 py-10 lg:px-8 lg:py-14">
+    <header class="rounded-3xl border border-slate-700 bg-gradient-to-br from-slate-900 via-slate-900 to-blue-950/60 p-8 shadow-2xl lg:p-12">
+      <p class="text-sm font-bold uppercase tracking-[0.22em] text-cyan-300">Altis Hackathon · Documentation Hub</p>
+      <h1 class="mt-3 text-4xl font-black tracking-tight md:text-6xl">Weather-aware cash-flow forecast, explained</h1>
+      <p class="mt-5 max-w-4xl text-lg leading-8 text-slate-200">This documentation set summarizes what the team built: a Databricks data pipeline that reconciles accounting exports, models 13-week cash flow, adds weather-driven schedule risk, exports gold tables to Azure SQL, and feeds a Lovable dashboard prototype.</p>
+      <div class="mt-6 flex flex-wrap gap-3">
+        <a class="rounded-full bg-cyan-400 px-4 py-2 text-sm font-bold text-slate-950" href="data-processing.html">Data processing</a>
+        <a class="rounded-full bg-amber-400 px-4 py-2 text-sm font-bold text-slate-950" href="kpi-methods.html">KPI methods</a>
+        <a class="rounded-full border border-slate-600 px-4 py-2 text-sm font-bold text-slate-200" href="../../WORKFLOW_EXPLAINED.html">Original workflow doc</a>
+      </div>
+      <figure class="mt-8 rounded-2xl border border-slate-700 bg-black/20 p-3">
+        <img class="w-full rounded-xl" src="../assets/altis-hackathon-docs/system-context.png" alt="Altis system context from raw Excel, JSON, and weather inputs through Databricks, Silver and Gold tables, Azure SQL, and Lovable dashboard with traceability back to source files.">
+        <figcaption class="mt-3 px-1 text-sm leading-6 text-slate-400"><strong>Reader question:</strong> what are the moving parts? The solution is not just a dashboard: dashboard numbers are downstream of raw accounting files, weather files, Databricks transformation notebooks, SQL export, and explicit assumptions.</figcaption>
+      </figure>
+    </header>
+
+    <section class="mt-6 grid gap-4 md:grid-cols-3">
+      <article class="rounded-2xl border border-slate-700 bg-slate-900/90 p-6">
+        <p class="text-xs font-bold uppercase tracking-widest text-cyan-300">Built</p>
+        <h2 class="mt-2 text-2xl font-bold">Data foundation</h2>
+        <p class="mt-3 text-slate-300">~31,734 deduplicated sales-side bookings from Yuki, Exact, and Dataset 2 into one canonical ledger. Andijk has aggregate KPI history only.</p>
+      </article>
+      <article class="rounded-2xl border border-slate-700 bg-slate-900/90 p-6">
+        <p class="text-xs font-bold uppercase tracking-widest text-amber-300">Built</p>
+        <h2 class="mt-2 text-2xl font-bold">Forecast engine</h2>
+        <p class="mt-3 text-slate-300">13-week direct-method forecast by portco, driver, scenario, and confidence label. No ML: every number maps to observed bookings or explicit assumptions.</p>
+      </article>
+      <article class="rounded-2xl border border-slate-700 bg-slate-900/90 p-6">
+        <p class="text-xs font-bold uppercase tracking-widest text-emerald-300">Built</p>
+        <h2 class="mt-2 text-2xl font-bold">Weather layer</h2>
+        <p class="mt-3 text-slate-300">KNMI daily weather becomes roofing work-day ratios, then adjusts expected revenue and implied DSO delay for wet/base/dry scenarios.</p>
+      </article>
+    </section>
+
+    <section class="mt-6 rounded-2xl border border-slate-700 bg-slate-900/90 p-6 lg:p-8">
+      <h2 class="text-2xl font-bold text-cyan-300">Document map</h2>
+      <div class="mt-4 grid gap-4 md:grid-cols-2">
+        <a class="block rounded-xl border border-slate-700 bg-slate-800/70 p-5 hover:border-cyan-300" href="data-processing.html">
+          <h3 class="text-xl font-bold">Data processing and architecture</h3>
+          <p class="mt-2 text-slate-300">Notebook-by-notebook walkthrough: raw files → Silver canonical ledger → Gold business tables → SQL export → dashboard.</p>
+        </a>
+        <a class="block rounded-xl border border-slate-700 bg-slate-800/70 p-5 hover:border-amber-300" href="kpi-methods.html">
+          <h3 class="text-xl font-bold">KPI and method reference</h3>
+          <p class="mt-2 text-slate-300">Definitions, formulas, assumptions, caveats, dashboard labels, and traceability method.</p>
+        </a>
+      </div>
+    </section>
+
+    <section class="mt-6 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-6 lg:p-8">
+      <h2 class="text-2xl font-bold text-amber-300">Lovable Git repo — how to find it</h2>
+      <ol class="mt-4 list-decimal space-y-2 pl-6 text-slate-200">
+        <li>Open the Lovable project in the browser.</li>
+        <li>Check <strong>Share / GitHub / Source code / Export</strong> in Lovable’s project settings. Lovable usually shows the connected GitHub repo URL there if GitHub sync was enabled.</li>
+        <li>If no repo is connected, use Lovable’s <strong>Connect GitHub</strong> or <strong>Export to GitHub</strong> action, then choose/create the repository.</li>
+        <li>Copy the GitHub HTTPS or SSH URL and run <code class="rounded bg-slate-950 px-1.5 py-0.5 text-amber-200">git clone &lt;repo-url&gt;</code>.</li>
+        <li>If the app is deployed but repo is unclear, inspect the Lovable project owner/workspace, GitHub account used for OAuth, and recent repositories created around the hackathon date.</li>
+      </ol>
+      <p class="mt-4 text-sm text-slate-300">When you provide the repo URL, clone path, or downloaded source, this doc set can be extended with frontend architecture and dashboard component mapping.</p>
+    </section>
+  </main>
+</body>
+</html>

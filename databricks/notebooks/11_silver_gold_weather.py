@@ -222,7 +222,7 @@ weekly = (
     workdays.groupby(["portco", "week_start"])
     .agg(
         work_day_ratio=("work_day_score", lambda s: round(s.sum() / 5.0, 3) if s.notna().any() else None),
-        wet_days=("rainfall_mm", lambda s: int((s > THRESHOLDS["light_rain_mm"]).sum())),
+        wet_days=("rainfall_mm", lambda s: int((s > THRESHOLDS["max_rain_mm"]).sum())),
         lost_days=("work_day_score", lambda s: int((s == 0).sum())),
         total_rain_mm=("rainfall_mm", lambda s: round(s.sum(), 1)),
         mean_temp_c=("mean_temp_c", lambda s: round(s.mean(), 1)),

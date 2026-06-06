@@ -198,7 +198,7 @@ ORDER BY booking_date DESC;
 - **Tier 2 workable-day rules** (binary, day-level — show on a tooltip next to the chart):
   - max temp ≤ 28 °C and min temp ≥ 5 °C
   - wind ≤ Beaufort 6 (≤ 13.8 m/s)
-  - rainfall ≤ 5 mm/day
+  - rainfall ≤ 100 mm/day (only extreme rainfall stops work — team decision; temperature and wind dominate)
   - Mon-Fri only (Saturdays and Sundays never count as workable, even with perfect weather)
 - **Andijk has no KNMI file** — its workable_days come from the portfolio average. Show a "weather = portfolio average" badge when Andijk is selected.
 - The supporting weather tables (`gold_weather_daily`, `_weekly`, `_climate_normals`, `_cashflow_forecast_13w_weather`) are still in SQL for the weather-adjusted forecast view; the headline bar+line chart only needs `gold_workable_days_monthly`.

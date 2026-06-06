@@ -154,17 +154,19 @@ print("wrote silver/weather_daily.parquet")
 
 # COMMAND ----------
 
-# Roofing workable-day rules (binary). Refined with team input:
+# Roofing workable-day rules (binary). Set by the team:
 #   - Above 28°C max temp → too hot for safe roofing
 #   - Below 5°C min temp → frozen / icy surfaces, dangerous
 #   - Wind above Beaufort 6 upper bound (~13.8 m/s) → can't work safely on a roof
-#   - Daily rainfall above 5 mm → industry rule of thumb for "stop outdoor work"
+#   - Daily rainfall above 100 mm → only true extreme rainfall stops work
+#     (team decision; effectively rain rarely trips the day. Temperature
+#     and wind dominate.)
 #   - Weekend (Sat/Sun) → roofers don't work
 THRESHOLDS = {
     "max_temp_c":   28.0,   # daily MAX > 28 → too hot
     "min_temp_c":   5.0,    # daily MIN < 5 → too cold
     "max_wind_ms":  13.8,   # > Beaufort 6 upper bound
-    "max_rain_mm":  5.0,    # > 5 mm/day → too wet
+    "max_rain_mm":  100.0,  # > 100 mm/day → extreme rain only
 }
 display(pd.DataFrame([THRESHOLDS]))
 

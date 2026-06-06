@@ -1,35 +1,58 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # 06 — Gold: 13-week cash-flow forecast
+# MAGIC # 06 — Predicting the next 13 weeks of cash
 # MAGIC
-# MAGIC Bottom-up direct method, driver-decomposition. No ML.
+# MAGIC **What this notebook does, in one sentence:** it predicts how much cash
+# MAGIC each company will receive (and pay out) every week for the next 13 weeks,
+# MAGIC under three different "what-if" scenarios.
 # MAGIC
-# MAGIC Inputs:
-# MAGIC - `gold/bookings_classified.parquet`
-# MAGIC - `gold/portfolio_kpi_monthly.parquet` (used for andijk where no Tx exists)
+# MAGIC **Why 13 weeks?** It's the standard CFO horizon — about three months
+# MAGIC ahead. Far enough to actually plan, close enough that the prediction is
+# MAGIC still meaningful.
 # MAGIC
-# MAGIC Outputs:
-# MAGIC - `gold/cashflow_history_weekly.parquet`
-# MAGIC - `gold/cashflow_forecast_13w.parquet`
-# MAGIC - `gold/assumptions.parquet` — per-portco knobs + scenario shifts
+# MAGIC ### The simple idea behind the forecast
 # MAGIC
-# MAGIC ### Per-week per-driver math
+# MAGIC We deliberately don't use any fancy machine learning. The CFO would
+# MAGIC never trust a black box for cash forecasting, and the challenge
+# MAGIC specifically rewards us for being able to explain every number on the
+# MAGIC dashboard.
 # MAGIC
-# MAGIC ```
-# MAGIC for portco p, future week W:
-# MAGIC   invoice_date_window = W − dso_days(p, scenario)
-# MAGIC   if invoice_date_window ≤ anchor_date(p):
-# MAGIC     cash_in_observed = sum(amount_net) over bookings of p in that window
-# MAGIC     confidence = "observed"
-# MAGIC   else:
-# MAGIC     cash_in_projected = avg_weekly(p, last 13w) × seasonality(p, month(window)) × growth × scenario_rev_mult(W)
-# MAGIC     confidence = "projected"
+# MAGIC Instead we use three plain-English rules:
 # MAGIC
-# MAGIC   cash_out_total = cash_in × (1 − gross_margin(p, scenario))
-# MAGIC   materials_out  = cash_out_total × materials_share
-# MAGIC   subcon_out     = cash_out_total × subcon_share
-# MAGIC   labour_out     = cash_out_total × labour_share
-# MAGIC ```
+# MAGIC **1. Money coming IN from customers, next 13 weeks:**
+# MAGIC - Customers pay invoices about **30 days** after we send them. (The CFO
+# MAGIC   confirmed this number exactly on 2026-06-06.)
+# MAGIC - So next week's cash receipts ≈ invoices we already sent ~30 days ago.
+# MAGIC - For weeks past where we have real data, we predict the invoicing rate
+# MAGIC   from recent history and adjust for the time of year (roofing has a big
+# MAGIC   summer peak and a quiet winter).
+# MAGIC
+# MAGIC **2. Money going OUT (materials, subcontractors, wages):**
+# MAGIC - We don't have supplier-side data yet, so we estimate it.
+# MAGIC - Rough rule: a roofing company keeps about 22% of revenue as gross
+# MAGIC   margin, so ~78% goes out as costs. We split those costs as materials
+# MAGIC   45%, subcontractors 35%, wages 20%.
+# MAGIC - These are "knobs" — when the client gives us real supplier data, we
+# MAGIC   just change the numbers, no code change needed.
+# MAGIC
+# MAGIC **3. Three scenarios:**
+# MAGIC - **Base** — business as usual.
+# MAGIC - **Wet quarter** — lots of rain, roofing work gets delayed. Customers
+# MAGIC   pay ~7 days later and revenue is ~10% lower for the first 6 weeks.
+# MAGIC - **Dry quarter** — great weather, work flies. Customers pay ~3 days
+# MAGIC   faster and revenue is ~5% higher for the first 6 weeks.
+# MAGIC
+# MAGIC ### A few terms used below
+# MAGIC
+# MAGIC - **DSO** = "Days Sales Outstanding". The average number of days between
+# MAGIC   sending an invoice and getting paid. Here, 30 days.
+# MAGIC - **Gross margin** = the fraction of revenue you keep after direct costs.
+# MAGIC   22% means out of every €100 of sales, €22 is gross profit and €78 went
+# MAGIC   to materials / subcontractors / wages.
+# MAGIC - **Seasonality** = how much busier (or quieter) a typical month is for
+# MAGIC   a given company, compared to that company's annual average.
+# MAGIC - **Anchor date** = the most recent booking date in our data. Up to this
+# MAGIC   date we have real numbers; after it we have predictions.
 
 # COMMAND ----------
 
@@ -58,19 +81,24 @@ gold_c = svc.get_container_client(GOLD)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Assumptions & scenarios (the only knobs that move the forecast)
+# MAGIC ## The "knobs" that drive the forecast
 # MAGIC
-# MAGIC Two dicts drive everything below:
+# MAGIC Two tables here. These are the only numbers that move the forecast, and
+# MAGIC the controller (a real human at the client) can edit them without
+# MAGIC touching code.
 # MAGIC
-# MAGIC - **`ASSUMPTIONS`** — per-portco steady-state values. DSO is CFO-stated (30 days
-# MAGIC   uniform). Gross margin and outflow shares are starting defaults the controller
-# MAGIC   will refine.
-# MAGIC - **`SCENARIOS`** — `base` / `wet` / `dry` shifts on top of the steady-state.
-# MAGIC   Wet weather slows acceptance → slower receipts (DSO +7d) and trims revenue 10%
-# MAGIC   for the first 6 weeks; dry weather pulls receipts in (-3d) and lifts revenue 5%.
+# MAGIC **Assumptions per company.** For each of the four companies: our
+# MAGIC starting guesses for things like payment speed, profit margin, and how
+# MAGIC costs split between materials / subcontractors / wages. DSO is 30 days
+# MAGIC for everyone (the CFO told us). The others are reasonable defaults until
+# MAGIC we get better numbers.
 # MAGIC
-# MAGIC Every forecast figure later traces back to exactly these numbers — they show up
-# MAGIC in the output as `assumption_dso_days` / `assumption_gross_margin` columns.
+# MAGIC **Scenarios.** Three "what-if" cases. Wet imagines bad weather slowing
+# MAGIC everything down; dry imagines great weather speeding things up.
+# MAGIC
+# MAGIC Every forecast number further down is tagged with the exact knob values
+# MAGIC used, so the dashboard can show "this forecast assumes DSO=30 days,
+# MAGIC margin=22%" right next to the number.
 
 # COMMAND ----------
 
@@ -133,13 +161,21 @@ print(f"net inflow bookings: {len(inflows):,}")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Historical weekly cash by portco × driver
+# MAGIC ## Past cash flow per week, broken down by company and cash type
 # MAGIC
-# MAGIC We aggregate `amount_net` per Monday-week per portco for the **observed**
-# MAGIC inflow driver (`milestone_in`). Then we derive the three outflow series
-# MAGIC (materials / subcontractor / labour) from gross margin and share splits.
-# MAGIC The `is_observed` column makes this distinction explicit so the dashboard
-# MAGIC can show inflows as solid lines and derived outflows as dashed/labelled.
+# MAGIC Before we forecast the future, we look at what actually happened. We
+# MAGIC add up the bookings week-by-week (each week starts on a Monday) for
+# MAGIC each company.
+# MAGIC
+# MAGIC That gives us the "money in from customers" line — which is REAL data
+# MAGIC straight from the ledger.
+# MAGIC
+# MAGIC We then calculate the three "money out" lines (materials, subcontractors,
+# MAGIC wages) using the margin and share assumptions from above. These are
+# MAGIC ESTIMATES, not observed numbers.
+# MAGIC
+# MAGIC A column called `is_observed` flags the difference, so the dashboard
+# MAGIC can show real data as solid lines and estimates as dashed/labelled.
 
 # COMMAND ----------
 
@@ -195,16 +231,21 @@ print("wrote gold/cashflow_history_weekly.parquet")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Seasonality factors per portco (month-of-year)
+# MAGIC ## "How busy is each month?" — the seasonality table
 # MAGIC
-# MAGIC We compute each portco's mean monthly inflow across the complete years
-# MAGIC 2023-2025 and express each month as a ratio of that portco's overall
-# MAGIC monthly mean. A factor > 1.0 means "this month is busier than average for
-# MAGIC this portco". Roofing has a strong summer peak — expect Jul/Aug/Sep > 1.0
-# MAGIC and Dec/Jan < 1.0.
+# MAGIC Roofing is a seasonal business — lots of work in summer, much less in
+# MAGIC winter. We measure each company's monthly pattern in two steps:
 # MAGIC
-# MAGIC The factor is applied to projected future weeks only — observed weeks come
-# MAGIC directly from the ledger.
+# MAGIC 1. Look at the three complete years we have (2023, 2024, 2025).
+# MAGIC 2. For each month, compare that month's average revenue to the company's
+# MAGIC    typical month.
+# MAGIC
+# MAGIC The result is a "busy-ness factor" per company per month. A factor of
+# MAGIC 1.5 means "this month is 50% busier than average for this company". 0.6
+# MAGIC means 40% quieter.
+# MAGIC
+# MAGIC We use these factors ONLY for predicted weeks — past weeks come straight
+# MAGIC from the real data.
 
 # COMMAND ----------
 
@@ -231,12 +272,16 @@ def get_seasonal(portco, month):
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Per-portco anchor date + recent avg weekly invoicing
+# MAGIC ## "Where does real data stop and prediction start?"
 # MAGIC
-# MAGIC `anchor` = the latest `booking_date` we observed for each portco. Anything
-# MAGIC after that is projection. `recent_weekly_avg` is the mean weekly invoicing
-# MAGIC over the 13 weeks before the anchor — this is the baseline that
-# MAGIC seasonality multiplies against to project future invoicing.
+# MAGIC For each company we find two numbers:
+# MAGIC
+# MAGIC - **Anchor date** — the most recent booking in our data. Everything up
+# MAGIC   to this date is REAL; everything after is PREDICTED.
+# MAGIC - **Recent weekly average** — how much that company has been invoicing
+# MAGIC   per week over the last 13 weeks of real data. This is the baseline for
+# MAGIC   our future predictions (multiplied by the seasonality factor for
+# MAGIC   whichever month we're predicting).
 
 # COMMAND ----------
 
@@ -258,21 +303,27 @@ display(anchors.round({"recent_weekly_avg": 0}))
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Forecast 13 weeks per (portco, scenario, driver)
+# MAGIC ## The actual 13-week forecast
 # MAGIC
-# MAGIC For each future cash week W and each portco × scenario combo we compute
-# MAGIC the **invoice window** that should land receipts in W (window = `W − DSO`).
-# MAGIC Three branches:
-# MAGIC - **observed** — invoice window entirely before the anchor → sum the real
-# MAGIC   bookings in that window. Deterministic, traceable to source rows.
-# MAGIC - **mixed** — window straddles the anchor → observed for the historical
-# MAGIC   part + projection for the future part.
-# MAGIC - **projected** — window entirely after the anchor → seasonality × recent
-# MAGIC   weekly avg × scenario revenue multiplier.
+# MAGIC For each of the next 13 weeks, for each company, and for each scenario,
+# MAGIC we calculate two things:
 # MAGIC
-# MAGIC The `confidence` column records which branch applied for every row, so the
-# MAGIC dashboard can colour-code certainty. Outflows are always `derived` because
-# MAGIC they come from the margin assumption, not observed cash.
+# MAGIC **Money in this week** is one of three things:
+# MAGIC - **"Observed"** — receipts in this future week come from invoices we
+# MAGIC   already sent (~30 days ago, before our data ends). We just add up the
+# MAGIC   real bookings in that window. Rock-solid.
+# MAGIC - **"Projected"** — receipts come from invoices the company hasn't sent
+# MAGIC   yet. We predict them from the recent weekly average × the seasonality
+# MAGIC   factor for that month × the scenario multiplier.
+# MAGIC - **"Mixed"** — the relevant invoice window straddles the anchor date,
+# MAGIC   so part is real and part is projected.
+# MAGIC
+# MAGIC **Money out** for that week = money in × (1 - 22% margin), split into
+# MAGIC three lines (materials, subcontractors, wages) using the share knobs.
+# MAGIC
+# MAGIC Every row gets a "confidence" label (observed / mixed / projected /
+# MAGIC derived) so the dashboard can colour-code certainty — solid lines for
+# MAGIC real data, dashed lines for estimates.
 
 # COMMAND ----------
 
@@ -401,7 +452,11 @@ print("wrote gold/cashflow_forecast_13w.parquet")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Assumptions table
+# MAGIC ## Save the assumptions for the dashboard tooltip
+# MAGIC
+# MAGIC We save every (company × scenario) combination's exact knob values to
+# MAGIC a table. This is what powers the dashboard tooltip "this forecast
+# MAGIC assumes DSO=30 days, gross margin=22%".
 
 # COMMAND ----------
 
@@ -429,7 +484,11 @@ print("wrote gold/assumptions.parquet")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Summary
+# MAGIC ## Headline numbers — total cash over 13 weeks per company × scenario
+# MAGIC
+# MAGIC One final table: for each company, what's the total net cash (money in
+# MAGIC minus money out) across the next 13 weeks, under each of the three
+# MAGIC scenarios? This is the headline number on the CFO dashboard.
 
 # COMMAND ----------
 

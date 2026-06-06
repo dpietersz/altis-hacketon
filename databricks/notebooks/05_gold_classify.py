@@ -1,19 +1,40 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # 05 — Gold: classify + resolve
+# MAGIC # 05 — Adding business meaning ("Gold" layer)
 # MAGIC
-# MAGIC Reads `silver/bookings.parquet` and the aggregated JSON, then writes:
-# MAGIC - `gold/bookings_classified.parquet` — silver + resolved portco names + driver column
-# MAGIC - `gold/portfolio_kpi_monthly.parquet` — per-portco monthly revenue from JSON (covers
-# MAGIC   all 4 portcos including `andijk` which has no Tx data)
-# MAGIC - `gold/_meta/gl_driver_mapping.json` — auditable GL → driver mapping
-# MAGIC - `gold/_meta/portco-mapping-latest.json` — confirmed silver-portco → real-portco map
+# MAGIC **What this notebook does, in one sentence:** it takes the cleaned-up
+# MAGIC bookings from notebook 03 and adds the labels the dashboard actually
+# MAGIC needs — "which portfolio company is this?" and "what kind of cash flow
+# MAGIC does this represent?".
 # MAGIC
-# MAGIC Confirmed mapping (notebook 04):
-# MAGIC - `peter_ummels` ← Yuki exports
-# MAGIC - `heeze` ← Exact GB 8000/8001/8002
-# MAGIC - `winschoten` ← Altis dataset 2 yearly sheets
-# MAGIC - `andijk` ← KPI-only (no Tx)
+# MAGIC **Why this step matters.** The dashboard won't show 31,734 anonymous
+# MAGIC bookings — it will show charts grouped by company and by cash type. So
+# MAGIC we need to label each booking before we can chart anything useful.
+# MAGIC
+# MAGIC ### The two labels we add to every booking
+# MAGIC
+# MAGIC **1. Portfolio company name.** In the cleaned-up silver layer, two of
+# MAGIC the three companies still have placeholder names. Notebook 04 figured
+# MAGIC out who's who; here we put the real names in.
+# MAGIC
+# MAGIC **2. Driver** — the cash-flow type. We use four categories:
+# MAGIC - `milestone_in` — money coming IN from a customer paying an invoice
+# MAGIC - `materials_out` — money going OUT to buy roofing materials
+# MAGIC - `subcon_out` — money going OUT to subcontractors
+# MAGIC - `labour_out` — money going OUT for wages
+# MAGIC
+# MAGIC The data the client gave us is sales-side only, so every booking we see
+# MAGIC right now is `milestone_in`. The other three drivers are calculated
+# MAGIC later from business assumptions (notebook 06).
+# MAGIC
+# MAGIC ### What comes out
+# MAGIC
+# MAGIC Two tables for the dashboard:
+# MAGIC - `gold/bookings_classified.parquet` — every booking with its labels.
+# MAGIC - `gold/portfolio_kpi_monthly.parquet` — monthly revenue per company
+# MAGIC   pulled from the client's summary file. This is the only source that
+# MAGIC   covers all four companies (including Andijk, for which we don't have
+# MAGIC   booking-level data).
 
 # COMMAND ----------
 
@@ -43,20 +64,26 @@ gold_c = svc.get_container_client(GOLD)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Static mappings (audit-friendly)
+# MAGIC ## The two "translation tables" that drive everything
 # MAGIC
-# MAGIC Two lookup tables drive the gold transformation:
+# MAGIC We use two simple lookup tables. Both are shown right below as actual
+# MAGIC data tables — easy to read, and easy for a controller (a real human at
+# MAGIC the client) to change later without touching code.
 # MAGIC
-# MAGIC - **`PORTCO_RENAME`** — resolves the "TBC" placeholders from silver
-# MAGIC   (`exact_opco_tbc`, `dataset2_opco_tbc`) into real portco names confirmed
-# MAGIC   in notebook 04 by matching monthly revenue against the aggregated JSON.
-# MAGIC - **`GL_DRIVER_MAP`** — each GL account → which driver it represents.
-# MAGIC   Today all 80xx accounts are `milestone_in` (sales). When new GL accounts
-# MAGIC   appear (materials, subcontractors, payroll), a controller adds rows here
-# MAGIC   — no pipeline change needed.
+# MAGIC **1. Portfolio company rename.** Two of the three companies were tagged
+# MAGIC with placeholders in silver. This table tells us which placeholder is
+# MAGIC which real company.
 # MAGIC
-# MAGIC Both maps are echoed to `gold/_meta/` so an auditor can see what was in
-# MAGIC effect for any given run.
+# MAGIC **2. Account category → cash-flow type.** Each Dutch accounting account
+# MAGIC (the *Grootboekrekening*, or GL account) gets mapped to one of the four
+# MAGIC cash-flow types. Today all the accounts the client gave us start with
+# MAGIC `80` — which in the Dutch chart of accounts means "Sales" — so they all
+# MAGIC map to "money coming in from customers". When the client sends us
+# MAGIC materials or wage data later, those accounts get added to this same
+# MAGIC table.
+# MAGIC
+# MAGIC We save both tables alongside the data so anyone auditing the dashboard
+# MAGIC later can see exactly what rules were used.
 
 # COMMAND ----------
 
@@ -107,16 +134,20 @@ def classify(gl_account, journal):
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Build `gold/bookings_classified`
+# MAGIC ## Add the two labels to every booking
 # MAGIC
-# MAGIC Three transformations on top of silver:
-# MAGIC 1. **Resolve portco** — apply `PORTCO_RENAME`.
-# MAGIC 2. **Classify driver** — look up `gl_account` in `GL_DRIVER_MAP`, fall back to journal,
-# MAGIC    fall back to "other".
-# MAGIC 3. **Clean `gl_account_text`** — for the Exact source this column was a per-booking
-# MAGIC    free-text field (invoice address). Replace with the controlled label from the map
-# MAGIC    so the column means the same thing in every row. Raw free text stays in
-# MAGIC    `boekingstekst` for traceability.
+# MAGIC We do three small things here:
+# MAGIC
+# MAGIC 1. **Replace the placeholder company names** with the real ones
+# MAGIC    (for example `exact_opco_tbc` → `heeze`).
+# MAGIC 2. **Add a "driver" column** — looking up which cash-flow type each
+# MAGIC    booking belongs to.
+# MAGIC 3. **Tidy up the account-description column.** In the Exact files, this
+# MAGIC    column held free-form text per booking (often the invoice address) —
+# MAGIC    so it meant something different on every row. We replace it with a
+# MAGIC    consistent label (e.g. *"Sales 21% VAT"*) so the column means the
+# MAGIC    same thing everywhere. The original free text stays in another column
+# MAGIC    so we can still trace back to it.
 
 # COMMAND ----------
 
@@ -170,18 +201,18 @@ print("wrote gold/bookings_classified.parquet")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Build `gold/portfolio_kpi_monthly` from the aggregated JSON
+# MAGIC ## Build the monthly revenue table — covers ALL FOUR companies
 # MAGIC
-# MAGIC The JSON gives portfolio-level Netto-omzet per portco per month, including
-# MAGIC **andijk** (for which we have no transaction data). This is the only
-# MAGIC source that covers all 4 portcos, so the frontend uses it for any portfolio
-# MAGIC roll-up that must include andijk.
+# MAGIC The client also gave us a summary file (in JSON format) with month-by-
+# MAGIC month revenue for all four portfolio companies — including **Andijk**,
+# MAGIC the one we don't have booking-level data for.
 # MAGIC
-# MAGIC The JSON shape differs per portco — month keys like `jan-23` live at
-# MAGIC varying depths and sometimes split across GL accounts (heeze is a "floor
-# MAGIC estimate" from partial data). The walker flattens everything to one row
-# MAGIC per `(portco, year, month)`; for heeze we sum across its GL-specific
-# MAGIC series.
+# MAGIC This means the dashboard can still show Andijk's revenue history
+# MAGIC alongside the other three (just without the drill-down to bookings).
+# MAGIC
+# MAGIC The JSON is messy — each company is shaped slightly differently. We walk
+# MAGIC through it and pull out every "January 2023: €X" style entry, then save
+# MAGIC them all as one tidy table.
 
 # COMMAND ----------
 
@@ -274,17 +305,23 @@ display(
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Cross-check: gold transactional totals vs KPI JSON
+# MAGIC ## Double-check — do our numbers match the client's summary?
 # MAGIC
-# MAGIC The single most important validation step. We sum `amount_net` per (portco,
-# MAGIC year, month) from gold bookings and compare to the JSON KPI. **Δ within ~2%
-# MAGIC means parsing + dedup are honest.** Bigger gaps are flagged for follow-up.
+# MAGIC This is the most important sanity check in this notebook.
 # MAGIC
-# MAGIC Expected behaviour:
-# MAGIC - **peter_ummels** / **winschoten**: tight match (silver came from same source as JSON).
-# MAGIC - **heeze**: gold should be much HIGHER than JSON (the JSON note says its
-# MAGIC   heeze numbers are a "floor estimate" from partial data; we have full GBs).
-# MAGIC - **andijk**: gold = 0 (no Tx data); KPI carries the value.
+# MAGIC We add up our cleaned bookings per company per year and compare them to
+# MAGIC the client's summary file. If they match within ~2%, our cleanup worked.
+# MAGIC If there's a big gap, something went wrong and we need to investigate.
+# MAGIC
+# MAGIC **What we expect to see:**
+# MAGIC - **Peter Ummels** and **Winschoten** — nearly identical (within 2%),
+# MAGIC   because the client's summary came from the same data we cleaned.
+# MAGIC - **Heeze** — our number should be MUCH HIGHER than the summary. That's
+# MAGIC   correct: the client noted in their JSON that their Heeze numbers were
+# MAGIC   just a rough estimate from a few files. We have all of Heeze's files,
+# MAGIC   so we see the real total.
+# MAGIC - **Andijk** — our number is zero (we don't have its booking-level data).
+# MAGIC   The summary carries the real total.
 
 # COMMAND ----------
 

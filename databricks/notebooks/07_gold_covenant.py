@@ -1,30 +1,45 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # 07 — Gold: covenant headroom + consolidated view (Tier 1 ship-stop)
+# MAGIC # 07 — Loan-safety check + portfolio view (the final dashboard data)
 # MAGIC
-# MAGIC Inputs:
-# MAGIC - `gold/cashflow_forecast_13w.parquet`
-# MAGIC - `gold/cashflow_history_weekly.parquet`
+# MAGIC **What this notebook does, in one sentence:** it figures out whether
+# MAGIC each company will run too low on cash in the next 13 weeks, and
+# MAGIC produces one portfolio-wide view for the PE board.
 # MAGIC
-# MAGIC Outputs:
-# MAGIC - `gold/covenant_headroom.parquet`   per (portco, scenario, week_idx) rolling slack
-# MAGIC - `gold/cashflow_consolidated_13w.parquet`   portfolio-level sum per scenario × week
+# MAGIC ### What's a "covenant"?
 # MAGIC
-# MAGIC ### Covenant model (placeholder until terms doc arrives)
+# MAGIC When a private-equity firm or a bank lends money to a company, they put
+# MAGIC rules in the loan contract — for example, *"you must keep at least €X in
+# MAGIC the bank at all times"*. These rules are called **covenants**.
 # MAGIC
-# MAGIC Without real terms, we use a **simple cash-floor proxy**: the cumulative net
-# MAGIC cash position over the 13 weeks must stay above a per-portco floor (defaults
-# MAGIC sized as 6 weeks of recent historical inflows, controller-tunable).
+# MAGIC If the company breaks a covenant, the lender can call the loan back,
+# MAGIC raise the interest rate, or take control. So the CFO watches the cash
+# MAGIC buffer like a hawk.
 # MAGIC
-# MAGIC ```
-# MAGIC starting_cash[p]    placeholder (€1M default — controller-set per portco)
-# MAGIC floor[p]            placeholder — 6× recent_weekly_avg(p)
-# MAGIC cum_cash[p, s, w]   = starting_cash[p] + Σ week_net[p, s, 0..w]
-# MAGIC headroom[p, s, w]   = cum_cash[p, s, w] − floor[p]
-# MAGIC status              = "breach" if cum_cash < floor
-# MAGIC                       "watch"  if cum_cash < floor × 1.2
-# MAGIC                       "ok"     else
-# MAGIC ```
+# MAGIC **"Headroom"** is just the gap between the company's current cash and
+# MAGIC the minimum the contract requires. Lots of headroom = relaxed. Headroom
+# MAGIC shrinking = time to act (delay supplier payments, chase customers,
+# MAGIC tap reserves).
+# MAGIC
+# MAGIC ### Important note about the numbers below
+# MAGIC
+# MAGIC We **don't have the real covenant document yet** — the client promised
+# MAGIC to send it. So we use a placeholder rule:
+# MAGIC
+# MAGIC > Each company should keep cumulative cash above a "floor" equal to
+# MAGIC > about 6 weeks of recent revenue, starting from €1 million in the bank.
+# MAGIC
+# MAGIC The dashboard MUST label these numbers as PLACEHOLDER until the real
+# MAGIC covenant arrives. When it does, we just swap the placeholder rule and
+# MAGIC re-run this notebook.
+# MAGIC
+# MAGIC ### Three "traffic light" statuses per week
+# MAGIC
+# MAGIC - 🟢 **OK** — cash is comfortably above the floor.
+# MAGIC - 🟡 **Watch** — cash is within 20% of the floor; the CFO should pay
+# MAGIC   attention.
+# MAGIC - 🔴 **Breach** — cash has dropped below the floor; the covenant is
+# MAGIC   broken.
 
 # COMMAND ----------
 
@@ -58,13 +73,15 @@ print(f"forecast: {len(forecast):,}   history: {len(history):,}")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Placeholder covenant parameters per portco
+# MAGIC ## The placeholder rules per company
 # MAGIC
-# MAGIC We do not have the real covenant terms doc yet, so we use a defensible
-# MAGIC stand-in: each portco must keep cumulative cash above a **floor** equal to
-# MAGIC ~6 weeks of recent weekly inflow. Starting cash is €1M per portco
-# MAGIC (placeholder — controller-set in production). The dashboard MUST label
-# MAGIC these as placeholder until the real covenant terms arrive.
+# MAGIC The table below shows what we're using for each company:
+# MAGIC - **Starting cash** = €1,000,000 (placeholder until the client tells us
+# MAGIC   the real opening balance).
+# MAGIC - **Floor** = 6 × that company's recent weekly revenue. Bigger companies
+# MAGIC   need more working cash, so their floor is higher.
+# MAGIC
+# MAGIC Again — these are PLACEHOLDERS until we get the real covenant document.
 
 # COMMAND ----------
 
@@ -92,12 +109,18 @@ display(pd.DataFrame.from_dict(PLACEHOLDER_PARAMS, orient="index").reset_index()
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Net cash per (portco, scenario, week)
+# MAGIC ## Cash position week by week for each company × scenario
 # MAGIC
-# MAGIC We collapse the forecast across all drivers to get one net-cash number per
-# MAGIC week, then accumulate from `starting_cash`. The `status` column trips
-# MAGIC `watch` 20% above the floor and `breach` at or below the floor — the
-# MAGIC dashboard uses these for amber/red badges.
+# MAGIC For each company and each scenario, we calculate four things per week:
+# MAGIC
+# MAGIC 1. **Net cash this week** = money in - money out (summing all four
+# MAGIC    cash-flow types).
+# MAGIC 2. **Running total** = starting cash + everything since week 0.
+# MAGIC 3. **Headroom** = running total - floor.
+# MAGIC 4. **Status** = 🟢 OK / 🟡 Watch / 🔴 Breach.
+# MAGIC
+# MAGIC This is the data the CFO dashboard will plot as a line chart with
+# MAGIC coloured background bands.
 
 # COMMAND ----------
 
@@ -139,12 +162,14 @@ display(
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Consolidated 13-week view (PE Board lens)
+# MAGIC ## The portfolio-wide view (for the PE board)
 # MAGIC
-# MAGIC The PE board wants one number per week across the portfolio. We sum the
-# MAGIC forecast across portcos for each (scenario, week, driver) and also produce
-# MAGIC a per-week net cash with rolling cumulative — that's the line the board
-# MAGIC actually looks at.
+# MAGIC The CFO cares about each company individually. The PE board (the owners
+# MAGIC of all four companies) cares about the whole portfolio at once.
+# MAGIC
+# MAGIC So here we add up all four companies into one big weekly number per
+# MAGIC scenario. The single line *"Cumulative portfolio cash, base scenario"*
+# MAGIC is the chart that goes on the PE board's monthly update slide.
 
 # COMMAND ----------
 
@@ -185,10 +210,12 @@ display(consolidated_net.pivot(index=["week_idx", "week_start"], columns="scenar
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Status summary
+# MAGIC ## Headline summary — how many weeks land in each colour?
 # MAGIC
-# MAGIC One row per (portco, scenario, status) telling us how many weeks land in
-# MAGIC each colour. This is what feeds the headline indicators on the CFO/PE views.
+# MAGIC One table that tells you, for each company × scenario, how many of the
+# MAGIC 13 weeks come out green / yellow / red. This is what feeds the big
+# MAGIC "covenant status" headline on the dashboard ("Heeze: 6 weeks at risk in
+# MAGIC the wet scenario").
 
 # COMMAND ----------
 

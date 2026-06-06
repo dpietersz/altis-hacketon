@@ -1,16 +1,28 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # 03 — Silver cleanse
+# MAGIC # 03 — Cleaning up the raw data ("Silver" layer)
 # MAGIC
-# MAGIC Read every file from `raw/received_original_data/`, parse per source-system
-# MAGIC schema, normalize to the canonical booking schema, dedup on natural key,
-# MAGIC and write `silver/bookings.parquet` + `silver/by_source/<file>.parquet`.
+# MAGIC **What this notebook does, in one sentence:** it reads every Excel file the
+# MAGIC client sent us and turns them into one tidy table that the rest of the
+# MAGIC project can use.
 # MAGIC
-# MAGIC No Spark for blob I/O (Spark Connect denies `fs.azure.account.key.*`).
-# MAGIC We use `azure-storage-blob` + pandas, then `spark.createDataFrame` at the
-# MAGIC end for display + verification.
+# MAGIC **Why we need this step.** The client gave us about 25 Excel files. They
+# MAGIC come from two different accounting systems (Yuki and Exact) and look very
+# MAGIC different from each other: different columns, different sheet names, some
+# MAGIC have extra "cover page" rows at the top that aren't real data, and some
+# MAGIC files overlap. We can't build a dashboard on top of that mess — so this
+# MAGIC notebook tidies it up first.
 # MAGIC
-# MAGIC Canonical schema lives in `PLAN.md` § "Canonical silver schema".
+# MAGIC **Two terms to know:**
+# MAGIC - A *booking* = one row in an accounting ledger. Think of it as a single
+# MAGIC   money movement: *"on 12 March we invoiced customer X for €450"*.
+# MAGIC - The *Silver layer* is a common data-engineering convention: it's the
+# MAGIC   "cleaned-up but not yet enriched" version of the raw files. Notebook 05
+# MAGIC   adds the business meaning on top — that's the *Gold layer*.
+# MAGIC
+# MAGIC **What comes out at the end:** one file called `silver/bookings.parquet`
+# MAGIC with every booking from every Excel, in the same shape, with duplicates
+# MAGIC removed.
 
 # COMMAND ----------
 
@@ -46,15 +58,25 @@ gold_client = svc.get_container_client(GOLD)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Canonical schema (target)
+# MAGIC ## The shape we want every file to end up in
 # MAGIC
-# MAGIC We collapse 4 source-system schemas (Yuki, Exact, dataset2-yearly, andijk-KPI)
-# MAGIC into one canonical booking row. Same shape coming out of every parser so
-# MAGIC the union is a plain `pd.concat`. Fields the source doesn't have stay as
-# MAGIC nulls (e.g. Yuki has no `vat_amount`).
+# MAGIC We pick one common set of columns and force every Excel file to fit it.
+# MAGIC That way, when we stack them all on top of each other later, we have one
+# MAGIC consistent table.
 # MAGIC
-# MAGIC The `source_file` and `source_schema` columns survive into gold so every
-# MAGIC downstream number traces back to a specific xlsx + sheet.
+# MAGIC The columns describe each booking:
+# MAGIC - **which company** it came from (we call them "portcos" — short for
+# MAGIC   portfolio companies, the four roofing businesses the PE firm owns)
+# MAGIC - **which kind of money** it was (a Dutch accounting category number —
+# MAGIC   notebook 05 translates these to plain English)
+# MAGIC - **when** the booking happened (date and which month of the year)
+# MAGIC - **how much** money was involved (debit, credit, net amount)
+# MAGIC - **a few extras** like VAT amount and the booking number (the unique ID
+# MAGIC   the accounting system gave it)
+# MAGIC
+# MAGIC We also keep the **source file name** on every row — so if someone later
+# MAGIC asks "where did this number come from?", we can trace it back to a
+# MAGIC specific Excel. That's the "auditability" the challenge wants.
 
 # COMMAND ----------
 
@@ -101,16 +123,24 @@ def _to_date(v):
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Parser — Schema A (Yuki / Peter Ummels)
+# MAGIC ## Reading the files from accounting system #1 — Yuki (Peter Ummels)
 # MAGIC
-# MAGIC Yuki exports have **12 meta rows** before the real header. Row 0 carries the
-# MAGIC administration, row 6 carries the GL account ("Grootboekrekening 8005 - omzet
-# MAGIC waarbij de heffing naar u is verlegd"), and row 12 is the actual column header
-# MAGIC (`Nr · Per · Datum · Bkst.nr · Dagboek · Debet · Credit`).
+# MAGIC One of the four portfolio companies, **Peter Ummels** (the roofing
+# MAGIC company in Brunssum), uses an accounting system called **Yuki**. Their
+# MAGIC Excel exports have a quirky layout:
 # MAGIC
-# MAGIC We read the file twice: first with no header to grab the meta, then again
-# MAGIC with `header=12` to grab the body. Footer "Eindtotaal" rows are filtered
-# MAGIC out by requiring `Datum` to parse as a date.
+# MAGIC - **The first 12 rows are a kind of cover page** — they tell you the
+# MAGIC   company name, the export date, and which "account category" the file
+# MAGIC   covers (for example *Sales 21% VAT* or *Sales with VAT shifted to the
+# MAGIC   buyer*).
+# MAGIC - **Row 13 is the real header** (Number, Period, Date, Booking number,
+# MAGIC   Journal, Debit, Credit).
+# MAGIC - **Rows 14 onwards are the actual bookings.**
+# MAGIC
+# MAGIC So our reader opens each file twice — once to peek at the cover page (so
+# MAGIC we know which account category this file is for), once to read the
+# MAGIC bookings themselves. We also drop the "grand total" row at the very
+# MAGIC bottom of each file.
 
 # COMMAND ----------
 
@@ -154,11 +184,17 @@ def parse_yuki(data: bytes, source_file: str) -> pd.DataFrame:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Parser — Schema B (Exact / GB files)
+# MAGIC ## Reading the files from accounting system #2 — Exact (Heeze)
 # MAGIC
-# MAGIC Exact GB exports are tidier — header on row 0, 11 columns. We carry over
-# MAGIC `BTW` (VAT amount), `BTW-srt` (VAT type), and `Boekingstekst` (free-text
-# MAGIC booking description, often the invoice address).
+# MAGIC Another portfolio company, **Heeze** (in Noord-Brabant), uses **Exact**.
+# MAGIC Their files are much easier — the header is on row 1, no cover page.
+# MAGIC
+# MAGIC We also pick up two extras these files give us:
+# MAGIC - **VAT amount** (the Dutch sales tax on each booking)
+# MAGIC - **VAT type** (standard 21%, lower 9%, or "shifted to the buyer" — a
+# MAGIC   common construction-industry rule where the buyer pays the VAT instead
+# MAGIC   of the seller)
+# MAGIC - **Booking description** — a free-form text (often the invoice address)
 
 # COMMAND ----------
 
@@ -195,12 +231,17 @@ def parse_exact_gb(data: bytes, source_file: str) -> pd.DataFrame:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Parser — Schema C (Dataset 2 yearly sheets)
+# MAGIC ## Reading the third source — a pre-cleaned roll-up (Winschoten)
 # MAGIC
-# MAGIC The yearly sheets in `Altis dataset 2.xlsx` are winschoten's transactional
-# MAGIC data — 6 columns, one journal (`006 - Verkoop`). No GL column; we leave
-# MAGIC `gl_account` null here and let driver classification fall back to the
-# MAGIC journal-to-driver map in notebook 05.
+# MAGIC For the third portfolio company, **Winschoten** (Groningen), the client
+# MAGIC didn't send us the original system's export. Instead they sent a
+# MAGIC pre-cleaned summary file with one sheet per year.
+# MAGIC
+# MAGIC The structure is even simpler — just date, booking number, journal name,
+# MAGIC debit, credit and VAT — but we don't know exactly which account category
+# MAGIC each booking is in. That gap is fine: every booking in these sheets comes
+# MAGIC from the "Sales" journal, so we know it's revenue. Notebook 05 fills in
+# MAGIC the missing label.
 
 # COMMAND ----------
 
@@ -232,13 +273,15 @@ def parse_dataset2_yearly(data: bytes, sheet_name: str, source_file: str) -> pd.
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Walk + parse + write per-source
+# MAGIC ## Process every file, one by one
 # MAGIC
-# MAGIC Iterate every blob under `raw/received_original_data/`, pick a parser by
-# MAGIC folder prefix, and accumulate parsed DataFrames in `per_source`. Any file
-# MAGIC that throws gets logged in `warnings` so one bad file doesn't kill the
-# MAGIC pipeline — the team can read `warnings` after the run to see what didn't
-# MAGIC make it in.
+# MAGIC Now we loop through all the Excel files the client gave us. For each one
+# MAGIC we look at which folder it sits in and pick the matching reader from
+# MAGIC above.
+# MAGIC
+# MAGIC If a file fails to read for any reason, we don't crash the whole run —
+# MAGIC we just log the failure and keep going. That way one weird file can't
+# MAGIC sink everything else.
 
 # COMMAND ----------
 
@@ -311,13 +354,18 @@ print(f"wrote {len(per_source)} files to silver/by_source/")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Union → canonical, dedup, write `silver/bookings.parquet`
+# MAGIC ## Stack everything into one big table, drop duplicates, save it
 # MAGIC
-# MAGIC The Yuki exports overlap: for GL 8005 each year has BOTH a full-year file
-# MAGIC AND a periods 1-5 file. Naively unioning would double-count ~5k rows. We
-# MAGIC dedup on `(administration, gl_account, booking_number, debit, credit,
-# MAGIC booking_date)` — same booking in two files is identical on all six. The
-# MAGIC dropped count below should be ~4-5k for this data set.
+# MAGIC Now we stack all the cleaned files on top of each other to get one big
+# MAGIC table of every booking.
+# MAGIC
+# MAGIC **Heads-up: the Yuki files overlap.** For one account category the
+# MAGIC client sent us both a "full year" file AND a "first 5 months" file —
+# MAGIC meaning the first 5 months of bookings show up twice if we don't watch
+# MAGIC out. We spot these duplicates by looking at the booking number + amount
+# MAGIC + date together (same numbers on all three = same booking) and keep just
+# MAGIC one copy. The "dropped" count below should be a few thousand rows —
+# MAGIC those are the safely-removed duplicates.
 
 # COMMAND ----------
 
@@ -347,7 +395,7 @@ print(f"wrote silver/bookings.parquet  rows={len(canonical):,}  cols={len(canoni
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Display via Spark
+# MAGIC ## A peek at the cleaned table
 
 # COMMAND ----------
 
@@ -359,11 +407,15 @@ display(sdf.limit(20))
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Quick aggregations to sanity-check
+# MAGIC ## Sanity check — does the cleaned data look reasonable?
 # MAGIC
-# MAGIC Net revenue per (portco, year) and per (portco, GL) — first eyeball that
-# MAGIC the dedup worked, that GLs in our data are what we expected (all 80xx
-# MAGIC Omzet), and that portco labels are consistent.
+# MAGIC Two quick tables to make sure nothing weird happened during cleanup:
+# MAGIC
+# MAGIC 1. **Total revenue per company per year** — should look like a healthy
+# MAGIC    roofing business (millions of euros per year, not millions of cents).
+# MAGIC 2. **Total revenue per account category** — should show mostly
+# MAGIC    sales-type categories. (The client only sent us sales-side data so far;
+# MAGIC    no materials, no wages, no subcontractor payments.)
 
 # COMMAND ----------
 
@@ -393,7 +445,12 @@ by_portco_gl.show(40, truncate=False)
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Write run snapshot to gold/_meta/
+# MAGIC ## Save a record of this run
+# MAGIC
+# MAGIC We drop a small summary file alongside the data with stats from this run
+# MAGIC (how many rows, how many duplicates removed, when it ran). Handy if
+# MAGIC something looks off later and we need to know what the data looked like
+# MAGIC at the time of the demo.
 
 # COMMAND ----------
 

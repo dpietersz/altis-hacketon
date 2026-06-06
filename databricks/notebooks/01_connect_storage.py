@@ -1,15 +1,16 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # 01 — Connect to atlishackethon storage & read XLSX (quick & dirty)
+# MAGIC # 01 — Connect to atlishackethon storage & read XLSX (serverless-safe)
 # MAGIC
-# MAGIC Hackathon mode. Account key pasted into a widget. Do NOT keep this notebook
-# MAGIC after the event — rotate the key when we're done.
+# MAGIC Serverless Databricks blocks `spark.conf.set("fs.azure.account.key.*")` via
+# MAGIC Spark Connect's allowlist. So we skip Spark and use the Azure Blob SDK
+# MAGIC directly — pure Python on the driver.
 # MAGIC
 # MAGIC Account: `atlishackethon` · plain Blob (HNS disabled) · westeurope.
 
 # COMMAND ----------
 
-# MAGIC %pip install openpyxl
+# MAGIC %pip install --quiet openpyxl azure-storage-blob
 # MAGIC dbutils.library.restartPython()
 
 # COMMAND ----------
@@ -25,15 +26,10 @@ assert account_key, "Paste the storage account key"
 
 # COMMAND ----------
 
-# HNS is disabled → use wasbs:// against the blob endpoint, not abfss://
-blob_host = f"{STORAGE_ACCOUNT}.blob.core.windows.net"
-spark.conf.set(f"fs.azure.account.key.{blob_host}", account_key)
+from azure.storage.blob import BlobServiceClient
 
-def wasbs(container: str, path: str = "") -> str:
-    return f"wasbs://{container}@{blob_host}/{path}"
-
-print("raw :", wasbs(RAW))
-print("gold:", wasbs(GOLD))
+account_url = f"https://{STORAGE_ACCOUNT}.blob.core.windows.net"
+svc = BlobServiceClient(account_url=account_url, credential=account_key)
 
 # COMMAND ----------
 
@@ -45,8 +41,8 @@ print("gold:", wasbs(GOLD))
 for c in (RAW, GOLD):
     print(f"=== {c} ===")
     try:
-        for f in dbutils.fs.ls(wasbs(c)):
-            print(f"{f.size:>12}  {f.path}")
+        for blob in svc.get_container_client(c).list_blobs():
+            print(f"{blob.size:>12}  {blob.name}")
     except Exception as e:
         print("ERROR:", e)
 
@@ -58,14 +54,14 @@ for c in (RAW, GOLD):
 # COMMAND ----------
 
 import pandas as pd
+import io
 
-xlsx_path = wasbs(RAW, "database.xlsx")
-local = "/tmp/database.xlsx"
+blob = svc.get_blob_client(container=RAW, blob="database.xlsx")
+data = blob.download_blob().readall()
+print(f"Downloaded {len(data):,} bytes")
 
-dbutils.fs.cp(xlsx_path, f"file:{local}")
-
-sheets = pd.read_excel(local, sheet_name=None)
+sheets = pd.read_excel(io.BytesIO(data), sheet_name=None)
 print(f"Loaded {len(sheets)} sheet(s): {list(sheets)}")
 for name, frame in sheets.items():
     print(f"--- {name} {frame.shape} ---")
-    display(frame.head())
+    print(frame.head().to_string())

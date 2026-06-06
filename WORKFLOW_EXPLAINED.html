@@ -164,6 +164,34 @@
   .scenarios .s.wet b { color: var(--info); }
   .scenarios .s.dry b { color: var(--warn); }
   .scenarios .s p { font-size: 14px; color: var(--muted); margin: 0; }
+  .rules {
+    background: #fafaf7;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin: 16px 0;
+  }
+  .rules h4 {
+    margin: 0 0 8px;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+  }
+  .rules table { margin: 0; }
+  .rules th, .rules td { padding: 6px 10px; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .rules tr:last-child td { border-bottom: 0; }
+  .chain {
+    background: var(--info-soft);
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin: 16px 0;
+    font-size: 15px;
+    color: var(--info);
+    font-weight: 500;
+    text-align: center;
+  }
+  .chain span { white-space: nowrap; }
   code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; background: #f1f1ec; padding: 1px 6px; border-radius: 4px; }
   footer {
     text-align: center;
@@ -182,7 +210,7 @@
 <header class="hero">
   <div class="tag">Altis hackathon — data pipeline walkthrough</div>
   <h1>How the cash flow pipeline works</h1>
-  <p class="sub">A plain-English walkthrough of the data work behind the Tier 1 CFO dashboard. Read top to bottom — no finance or engineering background needed.</p>
+  <p class="sub">A plain-English walkthrough of the data work behind the CFO dashboard — Tier 1 (cash forecast) plus Tier 2 (weather-adjusted). Read top to bottom — no finance or engineering background needed.</p>
 </header>
 
 <section>
@@ -194,43 +222,56 @@
   <h2>The journey, in one picture</h2>
   <p>The data goes through four stages. Each stage takes the previous one as input and produces something more useful.</p>
   <div class="pipeline">
-    <svg viewBox="0 0 660 170" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 720 220" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
           <path d="M0,0 L10,5 L0,10 Z" fill="#5e6470"/>
         </marker>
       </defs>
-      <!-- boxes -->
       <g font-family="-apple-system, sans-serif" font-size="13" fill="#1c1c1c">
-        <rect x="10"  y="55" width="120" height="60" rx="10" ry="10" fill="#fff2e3" stroke="#b85c00"/>
-        <text x="70" y="80" text-anchor="middle" font-weight="600">Raw Excel</text>
-        <text x="70" y="98" text-anchor="middle" fill="#5e6470">~25 files, 2 systems</text>
+        <rect x="10"  y="80" width="120" height="60" rx="10" ry="10" fill="#fff2e3" stroke="#b85c00"/>
+        <text x="70" y="105" text-anchor="middle" font-weight="600">Raw Excel</text>
+        <text x="70" y="123" text-anchor="middle" fill="#5e6470">~25 files, 2 systems</text>
 
-        <rect x="160" y="55" width="120" height="60" rx="10" ry="10" fill="#e8f1f8" stroke="#1f5b8b"/>
-        <text x="220" y="80" text-anchor="middle" font-weight="600">Silver</text>
-        <text x="220" y="98" text-anchor="middle" fill="#5e6470">one tidy table</text>
+        <rect x="160" y="80" width="120" height="60" rx="10" ry="10" fill="#e8f1f8" stroke="#1f5b8b"/>
+        <text x="220" y="105" text-anchor="middle" font-weight="600">Silver</text>
+        <text x="220" y="123" text-anchor="middle" fill="#5e6470">one tidy table</text>
 
-        <rect x="310" y="55" width="120" height="60" rx="10" ry="10" fill="#e9efea" stroke="#2e5d4f"/>
-        <text x="370" y="80" text-anchor="middle" font-weight="600">Gold</text>
-        <text x="370" y="98" text-anchor="middle" fill="#5e6470">labels + forecast</text>
+        <rect x="310" y="80" width="120" height="60" rx="10" ry="10" fill="#e9efea" stroke="#2e5d4f"/>
+        <text x="370" y="100" text-anchor="middle" font-weight="600">Gold · Tier 1</text>
+        <text x="370" y="118" text-anchor="middle" fill="#5e6470">labels + forecast</text>
+        <text x="370" y="132" text-anchor="middle" fill="#5e6470">+ covenant</text>
 
-        <rect x="460" y="55" width="120" height="60" rx="10" ry="10" fill="#f1f1ec" stroke="#5e6470"/>
-        <text x="520" y="80" text-anchor="middle" font-weight="600">SQL + dashboard</text>
-        <text x="520" y="98" text-anchor="middle" fill="#5e6470">the product</text>
+        <rect x="460" y="80" width="120" height="60" rx="10" ry="10" fill="#e9efea" stroke="#2e5d4f" stroke-dasharray="3 2"/>
+        <text x="520" y="105" text-anchor="middle" font-weight="600">Gold · Tier 2</text>
+        <text x="520" y="123" text-anchor="middle" fill="#5e6470">+ weather adj.</text>
+
+        <rect x="610" y="80" width="100" height="60" rx="10" ry="10" fill="#f1f1ec" stroke="#5e6470"/>
+        <text x="660" y="105" text-anchor="middle" font-weight="600">SQL</text>
+        <text x="660" y="123" text-anchor="middle" fill="#5e6470">+ dashboard</text>
+
+        <!-- KNMI side input -->
+        <rect x="460" y="0" width="120" height="50" rx="10" ry="10" fill="#fff2e3" stroke="#b85c00"/>
+        <text x="520" y="22" text-anchor="middle" font-weight="600">KNMI weather</text>
+        <text x="520" y="38" text-anchor="middle" fill="#5e6470">3 city files</text>
+        <line x1="520" y1="50" x2="520" y2="80" stroke="#5e6470" stroke-width="1.5" marker-end="url(#arrow)"/>
 
         <!-- arrows -->
-        <line x1="130" y1="85" x2="160" y2="85" stroke="#5e6470" stroke-width="1.5" marker-end="url(#arrow)"/>
-        <line x1="280" y1="85" x2="310" y2="85" stroke="#5e6470" stroke-width="1.5" marker-end="url(#arrow)"/>
-        <line x1="430" y1="85" x2="460" y2="85" stroke="#5e6470" stroke-width="1.5" marker-end="url(#arrow)"/>
+        <line x1="130" y1="110" x2="160" y2="110" stroke="#5e6470" stroke-width="1.5" marker-end="url(#arrow)"/>
+        <line x1="280" y1="110" x2="310" y2="110" stroke="#5e6470" stroke-width="1.5" marker-end="url(#arrow)"/>
+        <line x1="430" y1="110" x2="460" y2="110" stroke="#5e6470" stroke-width="1.5" marker-end="url(#arrow)"/>
+        <line x1="580" y1="110" x2="610" y2="110" stroke="#5e6470" stroke-width="1.5" marker-end="url(#arrow)"/>
 
         <!-- step labels -->
-        <text x="155" y="40" font-size="12" fill="#5e6470" text-anchor="middle">Step 1</text>
-        <text x="305" y="40" font-size="12" fill="#5e6470" text-anchor="middle">Steps 2 + 3 + 4</text>
-        <text x="455" y="40" font-size="12" fill="#5e6470" text-anchor="middle">Step 5</text>
+        <text x="155" y="68" font-size="12" fill="#5e6470" text-anchor="middle">Step 1</text>
+        <text x="305" y="68" font-size="12" fill="#5e6470" text-anchor="middle">Steps 2-4</text>
+        <text x="445" y="68" font-size="12" fill="#5e6470" text-anchor="middle">Step 5</text>
+        <text x="595" y="68" font-size="12" fill="#5e6470" text-anchor="middle">Step 6</text>
 
-        <text x="155" y="135" font-size="12" fill="#5e6470" text-anchor="middle">clean</text>
-        <text x="305" y="135" font-size="12" fill="#5e6470" text-anchor="middle">classify, forecast, check</text>
-        <text x="455" y="135" font-size="12" fill="#5e6470" text-anchor="middle">copy out</text>
+        <text x="155" y="160" font-size="12" fill="#5e6470" text-anchor="middle">clean</text>
+        <text x="305" y="160" font-size="12" fill="#5e6470" text-anchor="middle">classify, forecast, check</text>
+        <text x="445" y="160" font-size="12" fill="#5e6470" text-anchor="middle">layer in weather</text>
+        <text x="595" y="160" font-size="12" fill="#5e6470" text-anchor="middle">copy out</text>
       </g>
     </svg>
   </div>
@@ -297,6 +338,21 @@
     <div class="s dry"><b>Dry quarter</b><p>Great weather. Revenue +5% and payments arrive 3 days faster for the first 6 weeks.</p></div>
   </div>
 
+  <div class="rules">
+    <h4>Business rules used (Tier 1 forecast)</h4>
+    <table>
+      <thead><tr><th>Rule</th><th>Value</th><th>Where it comes from</th></tr></thead>
+      <tbody>
+        <tr><td>Days from invoice to payment (DSO)</td><td><strong>30 days</strong></td><td>Confirmed by the CFO on 2026-06-06</td></tr>
+        <tr><td>Days from signed acceptance to invoice sent</td><td><strong>≤ 7 days</strong></td><td>Confirmed by the CFO (baked into historical baseline)</td></tr>
+        <tr><td>Gross margin kept after direct costs</td><td><strong>22%</strong></td><td>Starting default — controller will refine when AP data arrives</td></tr>
+        <tr><td>Cost split: materials / subcon / wages</td><td><strong>45% / 35% / 20%</strong></td><td>Roofing-industry rule of thumb</td></tr>
+        <tr><td>Wet scenario shift</td><td>DSO +7 days, revenue −10% for 6 weeks</td><td>Placeholder (Tier 2 replaces this with real data)</td></tr>
+        <tr><td>Dry scenario shift</td><td>DSO −3 days, revenue +5% for 6 weeks</td><td>Placeholder (Tier 2 replaces this with real data)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
   <div class="callout">
     <strong>No AI, no machine learning.</strong> The CFO would never sign off on a number that came from a black box. Every forecast figure traces back to specific bookings plus named assumptions, so a controller can defend any number on the dashboard.
   </div>
@@ -330,11 +386,102 @@
       <tr><td><span class="dot r"></span><strong>Breach</strong></td><td>Below the floor — the covenant is broken.</td></tr>
     </tbody>
   </table>
+
+  <div class="rules">
+    <h4>Business rules used (placeholder covenant)</h4>
+    <table>
+      <thead><tr><th>Rule</th><th>Value</th></tr></thead>
+      <tbody>
+        <tr><td>Starting cash per company</td><td><strong>€1,000,000</strong> (placeholder — controller-set per portco)</td></tr>
+        <tr><td>Cash floor per company</td><td><strong>6 × recent weekly inflow</strong></td></tr>
+        <tr><td>Watch threshold</td><td>Cumulative cash within <strong>20%</strong> of the floor</td></tr>
+        <tr><td>Breach threshold</td><td>Cumulative cash <strong>at or below</strong> the floor</td></tr>
+      </tbody>
+    </table>
+  </div>
+
   <p>We also produce one <strong>consolidated view</strong> that adds all four companies together — that's the line the PE board cares about on their monthly update slide.</p>
 </section>
 
 <section>
-  <h2><span class="step">Step 5 of 5</span>Copy everything out for the dashboard</h2>
+  <h2><span class="step">Step 5 of 6 — Tier 2</span>Layer the weather into the forecast</h2>
+  <p>Tier 1's wet/dry scenarios were arbitrary toggles (<em>"let's pretend revenue drops 10% in the wet case"</em>). Tier 2 replaces those toggles with <strong>actual weather data</strong> from KNMI — three daily-weather files for the cities where the companies operate.</p>
+
+  <h3>Why weather matters for a roofing company</h3>
+  <p>Roofers can't work safely in heavy rain, freezing temperatures, or strong wind. So the weather directly determines whether the day produces invoiceable work or not. The chain is:</p>
+
+  <div class="chain"><span>Weather</span> &rarr; <span>lost work days</span> &rarr; <span>fewer invoices sent</span> &rarr; <span>less cash arrives 30 days later</span></div>
+
+  <p>We need to turn "it rained for 3 days" into "expect €X less cash next week". That's what this step does.</p>
+
+  <h3>Rule 1 — score each historical day</h3>
+  <p>For every day in 2020–2026, for each company, we look at the rainfall, temperature and wind, and assign a "work-day score":</p>
+
+  <div class="rules">
+    <h4>Daily roofing-productivity rules</h4>
+    <table>
+      <thead><tr><th>Condition</th><th>Score</th><th>Plain meaning</th></tr></thead>
+      <tbody>
+        <tr><td>Rainfall &gt; <strong>10 mm</strong>, or mean temp &lt; <strong>0 °C</strong>, or wind &gt; <strong>10 m/s</strong></td><td><strong>0.0</strong></td><td>Day lost — no roofing work possible</td></tr>
+        <tr><td>Rainfall <strong>1–10 mm</strong> (and no other blockers)</td><td><strong>0.5</strong></td><td>Half day — some crews work, some don't</td></tr>
+        <tr><td>Otherwise (dry, mild, calm)</td><td><strong>1.0</strong></td><td>Full work day</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>Thresholds are roofing-industry rules of thumb. The controller can edit them in notebook 11.</p>
+
+  <h3>Rule 2 — roll up to weekly</h3>
+  <p>For each Monday-week we add up the day-scores across Mon–Fri and divide by 5:</p>
+  <p style="text-align:center;font-size:17px;"><code>work_day_ratio = sum(day_scores Mon-Fri) / 5</code></p>
+  <p>So <strong>1.0</strong> = a perfect work week, <strong>0.6</strong> = 40% of working time lost to weather, <strong>0.0</strong> = nothing got done that week.</p>
+
+  <h3>Rule 3 — what does "wet" and "dry" actually look like?</h3>
+  <p>Instead of arbitrary toggles, we now derive scenarios from historical patterns. For each company we look at how each month of the year actually played out across 2022–2024:</p>
+
+  <div class="rules">
+    <h4>Scenario weather (from historical climate normals)</h4>
+    <table>
+      <thead><tr><th>Scenario</th><th>How we compute it</th><th>Plain meaning</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Base</strong></td><td>Median <code>work_day_ratio</code> for that month over 3 years</td><td>A typical month</td></tr>
+        <tr><td><strong>Wet</strong></td><td>10th percentile (one of the wettest in ten)</td><td>A bad month — what a real wet quarter looked like</td></tr>
+        <tr><td><strong>Dry</strong></td><td>90th percentile (one of the best in ten)</td><td>A great month — what a real dry quarter looked like</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>This is honest: we're saying <em>"this is what a real wet quarter looked like for this company"</em> rather than <em>"let's guess 10% worse"</em>.</p>
+
+  <h3>Rule 4 — adjust the forecast</h3>
+  <p>For each future week, for each company, for each scenario, we look up that month's <code>work_day_ratio</code> and apply two corrections:</p>
+
+  <div class="rules">
+    <h4>Weather adjustment applied to every forecast row</h4>
+    <table>
+      <tbody>
+        <tr><td>Expected revenue</td><td><code>baseline_revenue × work_day_ratio</code></td></tr>
+        <tr><td>Implied DSO delay (tooltip)</td><td><code>(1 − work_day_ratio) × 14 days</code></td></tr>
+        <tr><td>Expected outflows</td><td>Re-derived from the new revenue (same 22% margin + 45/35/20 split)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p>So if the model says <em>"60% productive in May for Heeze"</em>, then May's revenue forecast drops by 40% and we tell the dashboard "expect ~6 extra days of cash delay".</p>
+
+  <div class="callout warn">
+    <strong>The honest correction.</strong> Every Tier 2 scenario lands <strong>10–25% lower</strong> than the matching Tier 1 scenario. This isn't bad news — it's the model finally acknowledging that roofers don't get a full work-week every week. Tier 1 implicitly assumed they did.
+  </div>
+
+  <h3>What we don't have yet (so we can't fake)</h3>
+  <ul>
+    <li>A real <strong>future</strong> weather forecast. KNMI only sent us historical data. For now the next 13 weeks use "what the climate normally does in this month". When we wire a forecast API later, the model doesn't change — just the lookup.</li>
+    <li>Weather for <strong>Andijk</strong> (no KNMI file given). We use the average of the other three companies as a stand-in.</li>
+  </ul>
+</section>
+
+<section>
+  <h2><span class="step">Step 6 of 6</span>Copy everything out for the dashboard</h2>
   <p>The dashboard team can't read our Parquet files directly, so we copy every gold table into the Azure SQL database. From there the frontend can query like any normal database.</p>
   <table>
     <thead><tr><th>Table</th><th>What's in it</th><th>Rows</th></tr></thead>
@@ -347,6 +494,11 @@
       <tr><td><code>gold_covenant_headroom</code></td><td>Traffic-light status per company × scenario × week</td><td>156</td></tr>
       <tr><td><code>gold_cashflow_consolidated_13w</code></td><td>Portfolio-wide view for the PE board</td><td>156</td></tr>
       <tr><td><code>gold_cashflow_consolidated_net_13w</code></td><td>Portfolio-wide net cash + cumulative</td><td>39</td></tr>
+      <tr><td colspan="3" style="background:#fafaf7;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.06em;font-size:13px;">Tier 2 — weather tables</td></tr>
+      <tr><td><code>gold_weather_daily</code></td><td>Per-company × day: rainfall, temps, wind + work-day score</td><td>7,044</td></tr>
+      <tr><td><code>gold_weather_weekly</code></td><td>Per-company × week: <code>work_day_ratio</code>, total rainfall, lost days</td><td>1,008</td></tr>
+      <tr><td><code>gold_weather_climate_normals</code></td><td>Per-company × month: median / wet / dry <code>work_day_ratio</code></td><td>36</td></tr>
+      <tr><td><code>gold_cashflow_forecast_13w_weather</code></td><td>Tier 1 forecast adjusted by the weather model</td><td>624</td></tr>
     </tbody>
   </table>
 </section>
@@ -359,6 +511,8 @@
     <li>The CFO gives us a new DSO or margin number &rarr; edit the <code>ASSUMPTIONS</code> table in notebook 06.</li>
     <li>The covenant document arrives &rarr; replace the placeholder floor in notebook 07.</li>
     <li>The client adds new account categories (e.g. supplier invoices) &rarr; add them to the <code>GL_DRIVER_MAP</code> table in notebook 05; no code change needed.</li>
+    <li>The roofing-day thresholds need adjusting (a new study, or the foreman disagreeing with the 10 mm cut-off) &rarr; edit the <code>THRESHOLDS</code> table in notebook 11.</li>
+    <li>A live weather forecast API comes in &rarr; swap the climate-normal lookup in notebook 11 for the API call; the rest of the math is unchanged.</li>
   </ul>
 </section>
 
@@ -377,12 +531,16 @@
       <tr><td><strong>Headroom</strong></td><td>The slack between current cash and the covenant floor.</td></tr>
       <tr><td><strong>Anchor date</strong></td><td>The most recent date in our data. Up to here: real. After: predicted.</td></tr>
       <tr><td><strong>Silver / Gold</strong></td><td>Data-engineering stages. Silver = cleaned up. Gold = ready for the dashboard.</td></tr>
+      <tr><td><strong>Work-day score</strong></td><td>How productive a single day is for roofing: 1.0 = full, 0.5 = half, 0.0 = lost.</td></tr>
+      <tr><td><strong>Work-day ratio</strong></td><td>A weekly number 0–1 telling you what fraction of the work week the weather allowed.</td></tr>
+      <tr><td><strong>Climate normal</strong></td><td>"What the weather typically does this month, based on the last 3 years."</td></tr>
+      <tr><td><strong>KNMI</strong></td><td>The Royal Netherlands Meteorological Institute — the source of our weather data.</td></tr>
     </tbody>
   </table>
 </section>
 
 <footer>
-  Altis hackathon · pipeline built in Databricks (notebooks 03 → 08) · this document covers Tier 1.
+  Altis hackathon · pipeline built in Databricks (notebooks 03 → 12) · this document covers Tier 1 (cash forecast + covenant) and Tier 2 (weather adjustment).
 </footer>
 
 </div>

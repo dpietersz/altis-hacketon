@@ -47,7 +47,6 @@ SQLSERVER_OPTS = {
     "password": SQL_PASSWORD,
     "encrypt": "true",
     "trustServerCertificate": "false",
-    "hostNameInCertificate": "*.database.windows.net",
 }
 
 svc = BlobServiceClient(

@@ -242,6 +242,7 @@ mapping = {
     "silver_yearly": silver_yearly.to_dict(orient="records"),
     "dataset1_yearly_total": ds1_yearly_total.to_dict(orient="records"),
     "json_portcos_seen": list(agg.keys()),
+    "raw_json_for_inspection": agg,  # entire 8KB JSON for offline structure analysis
 }
 
 gold_c.upload_blob(
